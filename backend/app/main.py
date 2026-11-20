@@ -10,8 +10,10 @@ from app.adapters.ollama.provider import (
     build_chat_timeout,
     build_ollama_client,
 )
+from app.adapters.sqlite.conversations import SqliteConversationRepository
+from app.adapters.sqlite.database import connect, sqlite_path
 from app.api.dependencies import require_session
-from app.api.routes import auth, chat, health, models
+from app.api.routes import auth, chat, conversations, health, models
 from app.core.auth import AuthService
 from app.core.config import Settings, get_settings
 from app.core.errors import register_exception_handlers
@@ -32,10 +34,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             settings.ollama_timeout_seconds, settings.ollama_chat_read_timeout_seconds
         )
         app.state.llm_provider = OllamaProvider(client, chat_timeout)
+        db = await connect(sqlite_path(settings.database_url))
+        app.state.conversations = SqliteConversationRepository(db)
         logger.info("Backend started (env=%s)", settings.app_env)
         try:
             yield
         finally:
+            await db.close()
             await client.aclose()
 
     docs_enabled = not settings.is_production
@@ -72,6 +77,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     protected = [Depends(require_session)]
     app.include_router(models.router, prefix="/api", dependencies=protected)
     app.include_router(chat.router, prefix="/api", dependencies=protected)
+    app.include_router(conversations.router, prefix="/api", dependencies=protected)
     return app
 
 
