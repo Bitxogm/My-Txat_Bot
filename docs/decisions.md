@@ -63,3 +63,19 @@ Registro corto de decisiones de arquitectura. Formato: contexto, decisión, cons
   - La personalidad se fija al crear la conversación: se guarda `personality_id` y una copia (snapshot) del prompt de personalidad, el nombre, el icono y `temperature`/`top_p`/`num_ctx`. No se cambia a mitad de conversación.
   - Los adaptadores aplican los parámetros que admiten (Ollama: `options`; API compatible con OpenAI: `temperature` y `top_p`, sin `num_ctx`) y descartan el resto en silencio.
 - **Consecuencias**: la capa base es una barrera de prompt, no una garantía: una copia editada a propósito puede intentar anularla (el usuario es el dueño). Editar o borrar una personalidad no afecta a conversaciones ya creadas. La capa base se compone en cada turno, así que corregirla sí llega a las conversaciones antiguas. Las conversaciones anteriores a esta migración no tienen personalidad: solo la capa base y los parámetros por defecto del modelo. El seed sobrescribe las incorporadas con lo que haya en el código en cada arranque; las que se quiten del código pasan a ser editables.
+
+## ADR-014: Catálogo de fuentes OSINT como entidad independiente
+- **Contexto**: el Auditor de Huella Digital necesita recomendar fuentes según el activo auditado. Escribirlas dentro de su `system_prompt` sería difícil de mantener.
+- **Decisión**:
+  - Las fuentes viven en la tabla `osint_sources` (migración v3), no en el prompt. 27 fuentes incorporadas en 8 categorías (`breach`, `username`, `domain`, `image`, `code`, `forum`, `browser_fingerprint`, `aggregator`; enum en `domain/osint.py`) creadas con un seed idempotente (`domain/builtin_osint_sources.py`, ids `osint-*`).
+  - Las incorporadas no se editan ni se borran (403 `OSINT_SOURCE_BUILTIN`): solo se activan o desactivan. El seed actualiza su contenido desde el código pero **nunca toca `is_active`**. Las propias se crean, editan y borran libremente.
+  - El prompt del Auditor (`builtin-auditor-huella`) recibe en cada turno las fuentes activas agrupadas por categoría (las categorías vacías no aparecen), como bloque de datos de referencia `<catalogo_osint>` entre la personalidad y el recordatorio final. El catálogo no forma parte del snapshot de la conversación: es conocimiento, no comportamiento.
+- **Consecuencias**:
+  - Actualizar fuentes no toca la personalidad, y al revés.
+  - Nombres, URLs y descripciones entran en el system prompt: se validan al guardar (NFKC, una línea, sin `<>`, backticks ni caracteres invisibles, bidi, de control o de uso privado; URL `http(s)` en ASCII imprimible, con dominio DNS válido —IDN en punycode—, puerto válido, sin credenciales, sin IPs ni `localhost`) y se vuelven a limpiar al componer el prompt.
+  - Límites para no desplazar la capa base ni la conversación (el Auditor usa `num_ctx` 8192): máximo 100 fuentes propias (409 `OSINT_SOURCE_LIMIT`) y bloque de catálogo de 6000 caracteres como máximo; si no cabe todo, las incorporadas tienen prioridad y se indica cuántas se omiten.
+  - `PUT` es sustitución completa: `is_active` es obligatorio, para que omitirlo no reactive una fuente apagada. El toggle es una sola sentencia atómica.
+  - No reutilizar el id de una incorporada retirada: el seed la volvería a marcar como incorporada y pisaría las ediciones del usuario.
+  - Las copias del Auditor no reciben el catálogo (se identifica por id).
+  - `requires_payment` es booleano: las fuentes freemium van con `false` y "Freemium" en la descripción.
+  - Las migraciones siguen en `adapters/sqlite/database.py` (lista `MIGRATIONS`), no en una carpeta aparte.
