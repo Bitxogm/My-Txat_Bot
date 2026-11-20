@@ -1,10 +1,29 @@
 import { networkError, request, send } from './client';
 import { ApiError, fallbackMessage, isAbortError } from './errors';
 import { readSse } from './sse';
-import type { ChatRequest, ChatResult, HealthResponse, ModelsResponse } from './types';
+import type {
+  ChatRequest,
+  ChatResult,
+  HealthResponse,
+  LoginRequest,
+  MeResponse,
+  ModelsResponse,
+} from './types';
 
 export function getHealth(signal?: AbortSignal): Promise<HealthResponse> {
   return request<HealthResponse>('/health', { signal });
+}
+
+export async function login(credentials: LoginRequest): Promise<void> {
+  await send('/auth/login', { method: 'POST', body: credentials });
+}
+
+export async function logout(): Promise<void> {
+  await send('/auth/logout', { method: 'POST' });
+}
+
+export function getMe(signal?: AbortSignal): Promise<MeResponse> {
+  return request<MeResponse>('/auth/me', { signal });
 }
 
 export function listModels(signal?: AbortSignal): Promise<ModelsResponse> {

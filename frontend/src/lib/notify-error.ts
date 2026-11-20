@@ -3,10 +3,12 @@ import { ApiError, isAbortError } from '@/lib/api';
 
 /**
  * Shows an error toast. Server and network errors include the request_id so it can be
- * looked up in the backend logs. Aborted requests are ignored.
+ * looked up in the backend logs. Aborted requests are ignored, and so are 401s: the
+ * unauthorized handler (useAuth) already sends the user back to the login form.
  */
 export function notifyError(error: unknown): void {
   if (isAbortError(error)) return;
+  if (error instanceof ApiError && error.kind === 'unauthorized') return;
 
   if (!(error instanceof ApiError)) {
     toast.error('Ha ocurrido un error inesperado.');
