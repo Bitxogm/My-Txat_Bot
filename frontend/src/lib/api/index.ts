@@ -2,8 +2,10 @@ export { request, send, setUnauthorizedHandler } from './client';
 export type { RequestOptions } from './client';
 export {
   createConversation,
+  createOsintSource,
   createPersonality,
   deleteConversation,
+  deleteOsintSource,
   deletePersonality,
   duplicatePersonality,
   getConversation,
@@ -11,12 +13,15 @@ export {
   getMe,
   listConversations,
   listModels,
+  listOsintSources,
   listPersonalities,
   login,
   logout,
   renameConversation,
+  replaceOsintSource,
   sendMessage,
   streamChat,
+  toggleOsintSource,
   updatePersonality,
 } from './endpoints';
 export type { StreamChatOptions } from './endpoints';

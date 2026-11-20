@@ -11,6 +11,10 @@ import type {
   LoginRequest,
   MeResponse,
   ModelsResponse,
+  OsintCategory,
+  OsintSource,
+  OsintSourceInput,
+  OsintSourceList,
   Personality,
   PersonalityInput,
   PersonalityList,
@@ -172,4 +176,34 @@ export function duplicatePersonality(id: string): Promise<Personality> {
   return request<Personality>(`/personalities/${encodeURIComponent(id)}/duplicate`, {
     method: 'POST',
   });
+}
+
+export function listOsintSources(
+  category?: OsintCategory,
+  signal?: AbortSignal,
+): Promise<OsintSourceList> {
+  const query = category ? `?category=${encodeURIComponent(category)}` : '';
+  return request<OsintSourceList>(`/osint-sources${query}`, { signal });
+}
+
+export function createOsintSource(body: OsintSourceInput): Promise<OsintSource> {
+  return request<OsintSource>('/osint-sources', { method: 'POST', body });
+}
+
+/** Full replacement. On a built-in only `is_active` may differ from the stored values. */
+export function replaceOsintSource(id: string, body: OsintSourceInput): Promise<OsintSource> {
+  return request<OsintSource>(`/osint-sources/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body,
+  });
+}
+
+export function toggleOsintSource(id: string): Promise<OsintSource> {
+  return request<OsintSource>(`/osint-sources/${encodeURIComponent(id)}/toggle`, {
+    method: 'POST',
+  });
+}
+
+export async function deleteOsintSource(id: string): Promise<void> {
+  await send(`/osint-sources/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
