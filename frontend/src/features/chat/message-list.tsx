@@ -7,6 +7,16 @@ const STATUS_NOTE: Partial<Record<UiMessage['status'], string>> = {
   error: 'No se pudo completar la respuesta.',
 };
 
+const EMPTY_REPLY_NOTE = 'El modelo no devolvió ninguna respuesta.';
+
+function noteFor(message: UiMessage): { text: string; isError: boolean } | null {
+  const empty = message.role === 'assistant' && message.content.trim() === '';
+  // Replies saved as "done" with no text (e.g. a reasoning model that ran out of length).
+  if (empty && message.status === 'done') return { text: EMPTY_REPLY_NOTE, isError: true };
+  const text = STATUS_NOTE[message.status];
+  return text ? { text, isError: message.status === 'error' } : null;
+}
+
 export function MessageList({
   messages,
   loading = false,
@@ -37,42 +47,47 @@ export function MessageList({
             Escribe un mensaje para empezar.
           </p>
         ) : (
-          messages.map((message) => (
-            <article
-              key={message.id}
-              aria-label={message.role === 'user' ? 'Tú' : 'Asistente'}
-              className={cn(
-                'flex flex-col gap-1',
-                message.role === 'user' ? 'items-end' : 'items-start',
-              )}
-            >
-              <div
+          messages.map((message) => {
+            const note = noteFor(message);
+            const showBubble = message.content !== '' || message.status === 'streaming';
+            return (
+              <article
+                key={message.id}
+                aria-label={message.role === 'user' ? 'Tú' : 'Asistente'}
                 className={cn(
-                  'max-w-[85%] rounded-2xl px-4 py-2 text-sm leading-relaxed break-words whitespace-pre-wrap',
-                  message.role === 'user'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted text-foreground',
+                  'flex flex-col gap-1',
+                  message.role === 'user' ? 'items-end' : 'items-start',
                 )}
               >
-                {message.content ||
-                  (message.status === 'streaming' ? (
-                    <span className="text-muted-foreground animate-pulse" aria-label="Generando">
-                      …
-                    </span>
-                  ) : null)}
-              </div>
-              {STATUS_NOTE[message.status] && (
-                <span
-                  className={cn(
-                    'px-2 text-xs',
-                    message.status === 'error' ? 'text-destructive' : 'text-muted-foreground',
-                  )}
-                >
-                  {STATUS_NOTE[message.status]}
-                </span>
-              )}
-            </article>
-          ))
+                {showBubble && (
+                  <div
+                    className={cn(
+                      'max-w-[85%] rounded-2xl px-4 py-2 text-sm leading-relaxed break-words whitespace-pre-wrap',
+                      message.role === 'user'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted text-foreground',
+                    )}
+                  >
+                    {message.content || (
+                      <span className="text-muted-foreground animate-pulse" aria-label="Generando">
+                        …
+                      </span>
+                    )}
+                  </div>
+                )}
+                {note && (
+                  <span
+                    className={cn(
+                      'px-2 text-xs',
+                      note.isError ? 'text-destructive' : 'text-muted-foreground',
+                    )}
+                  >
+                    {note.text}
+                  </span>
+                )}
+              </article>
+            );
+          })
         )}
       </div>
     </div>

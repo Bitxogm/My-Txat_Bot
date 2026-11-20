@@ -66,7 +66,8 @@ Requiere sesión (401 sin cookie válida). `/api/chat` es la variante sin estado
   - `event: token` / `data: {"content": "..."}` por cada fragmento.
   - `event: done` / `data: {"model": "..."}` al terminar.
   - `event: error` / `data: {code, message, request_id}` si falla con el stream ya empezado.
-- Los fallos antes del primer token (modelo inexistente → 404 `MODEL_NOT_FOUND`, Ollama caído → 503 `MODEL_UNAVAILABLE`) devuelven el JSON de error normal.
+- Los fallos antes del primer token (modelo inexistente → 404 `MODEL_NOT_FOUND`, Ollama caído → 503 `MODEL_UNAVAILABLE`, respuesta sin texto → 502 `EMPTY_REPLY`) devuelven el JSON de error normal.
+- Razonamiento de los modelos que lo tienen (qwen3.5, deepseek-r1…) desactivado por defecto (`OLLAMA_THINK=false`): con él, Ollama manda el razonamiento aparte, el backend lo ignora y la primera palabra puede tardar minutos o no llegar si se agota el límite de longitud.
 - Si el cliente corta la conexión, el backend cierra la petición a Ollama.
 
 ## Frontend (estructura prevista)

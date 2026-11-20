@@ -5,7 +5,7 @@ import pytest
 
 from app.adapters.sqlite.conversations import SqliteConversationRepository
 from app.api.streaming import stream_reply
-from app.core.errors import ModelNotFoundError, ModelUnavailableError
+from app.core.errors import EmptyReplyError, ModelNotFoundError, ModelUnavailableError
 from app.domain.chat import ChatMessage
 from tests.conftest import FakeLLMProvider
 
@@ -94,6 +94,20 @@ async def test_unknown_model_is_json_404_and_saved_as_error(
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "MODEL_NOT_FOUND"
+    detail = (await client.get(f"/api/conversations/{conversation_id}")).json()
+    assert detail["messages"][-1]["status"] == "error"
+
+
+async def test_empty_reply_is_a_json_error_and_saved_as_error(
+    client: httpx.AsyncClient, fake_llm: FakeLLMProvider
+) -> None:
+    conversation_id = await create(client)
+    fake_llm.fail_before = EmptyReplyError()
+
+    response = await send(client, conversation_id, "hola")
+
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "EMPTY_REPLY"
     detail = (await client.get(f"/api/conversations/{conversation_id}")).json()
     assert detail["messages"][-1]["status"] == "error"
 

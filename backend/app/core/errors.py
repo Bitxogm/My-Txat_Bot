@@ -73,6 +73,12 @@ class ModelUnavailableError(AppError):
     message = "El servidor de modelos no está disponible"
 
 
+class EmptyReplyError(AppError):
+    status_code = HTTPStatus.BAD_GATEWAY
+    code = "EMPTY_REPLY"
+    message = "El modelo no devolvió ninguna respuesta"
+
+
 class ModelNotFoundError(AppError):
     status_code = HTTPStatus.NOT_FOUND
     code = "MODEL_NOT_FOUND"
