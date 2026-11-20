@@ -76,7 +76,7 @@ jobs:
       - if: steps.detect.outputs.present == 'true'
         run: npm run format:check
       - if: steps.detect.outputs.present == 'true'
-        run: npx tsc --noEmit
+        run: npx tsc -b
       - if: steps.detect.outputs.present == 'true'
         run: npm run test -- --run
       - if: steps.detect.outputs.present == 'true'

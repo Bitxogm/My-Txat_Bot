@@ -10,4 +10,6 @@ paths:
 - Errores: el cliente API devuelve errores tipados; la UI los muestra con Sonner (`toast.error`) incluyendo el `request_id` en los 5xx.
 - Componentes base con shadcn/ui (`npx shadcn add ...`). No editar `src/components/ui/` salvo necesidad clara.
 - Sin `any`. Nada de tokens ni datos sensibles en `localStorage`/`sessionStorage`; la sesión va en cookie httpOnly.
-- Antes de dar algo por terminado: `npm run lint && npm run format:check && npx tsc --noEmit && npm run test -- --run`.
+- Antes de dar algo por terminado: `npm run lint && npm run format:check && npx tsc -b && npm run test -- --run`.
+- TypeScript fijado en `~6.0`: typescript-eslint aún no soporta TS 7 (peer `<6.1`). No subirlo hasta que lo soporte.
+- Type-check con `npx tsc -b` (el `tsconfig.json` raíz solo tiene referencias; `tsc --noEmit` sobre él no comprueba nada).

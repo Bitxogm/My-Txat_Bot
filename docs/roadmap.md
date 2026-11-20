@@ -12,7 +12,7 @@ Cada fase se divide en tareas pequeñas. Una tarea = una rama = una PR.
 - [x] Backend FastAPI: config, logging, request id, handler global de errores, `/api/health`
 - [x] Dockerfile del backend
 - [x] Proveedor Ollama: listar modelos y chat con streaming (SSE)
-- [ ] Scaffold frontend (Vite + React + TS + Tailwind + shadcn/ui + Sonner)
+- [x] Scaffold frontend (Vite + React + TS + Tailwind + shadcn/ui + Sonner)
 - [ ] Cliente API único con mapeo de errores
 - [ ] Pantalla de chat con selector de modelo
 - [ ] Dockerfile del frontend (build + nginx)
