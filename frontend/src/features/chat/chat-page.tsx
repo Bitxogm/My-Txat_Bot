@@ -2,8 +2,19 @@ import { useState } from 'react';
 import { LogOutIcon, MenuIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
-import { ConversationSidebar } from '@/features/conversations/conversation-sidebar';
+import {
+  ConversationSidebar,
+  type SettingsPage,
+} from '@/features/conversations/conversation-sidebar';
 import { useConversations } from '@/features/conversations/use-conversations';
+import { PersonalitiesPage } from '@/features/personalities/personalities-page';
+import { PersonalityBadge } from '@/features/personalities/personality-badge';
+import { PersonalityPicker } from '@/features/personalities/personality-picker';
+import {
+  DEFAULT_PERSONALITY_ID,
+  usePersonalities,
+} from '@/features/personalities/use-personalities';
+import type { Personality } from '@/lib/api';
 import { Composer } from './composer';
 import { MessageList } from './message-list';
 import { ModelSelect } from './model-select';
@@ -19,16 +30,35 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
   const { models, selected, select, status, reload } = useModels();
   const conversations = useConversations();
   const chat = useChat({ onActivity: conversations.refresh });
+  const personalities = usePersonalities();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [page, setPage] = useState<SettingsPage | null>(null);
+  const [personalityId, setPersonalityId] = useState(DEFAULT_PERSONALITY_ID);
+
+  function choosePersonality(personality: Personality) {
+    setPersonalityId(personality.id);
+    // The personality's preferred model, if it's available here.
+    if (personality.default_model && models.some((m) => m.name === personality.default_model)) {
+      select(personality.default_model);
+    }
+  }
+
+  function openPage(next: SettingsPage) {
+    setSidebarOpen(false);
+    setPage(next);
+  }
 
   async function openConversation(id: string) {
     setSidebarOpen(false);
+    setPage(null);
     const detail = await chat.open(id);
     if (detail && models.some((m) => m.name === detail.model)) select(detail.model);
   }
 
   function startNew() {
     setSidebarOpen(false);
+    setPage(null);
+    setPersonalityId(DEFAULT_PERSONALITY_ID);
     chat.startNew();
   }
 
@@ -36,6 +66,10 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
     if (id === chat.conversationId) chat.startNew();
     await conversations.remove(id);
   }
+
+  // A brand-new chat (nothing sent yet) shows the personality picker instead of messages.
+  const isNewChat =
+    !chat.conversationId && chat.messages.length === 0 && personalities.personalities.length > 0;
 
   const sidebar = (
     <ConversationSidebar
@@ -45,6 +79,8 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
       onSelect={(id) => void openConversation(id)}
       onNew={startNew}
       onDelete={(id) => void deleteConversation(id)}
+      onOpenPage={openPage}
+      activePage={page}
     />
   );
 
@@ -76,6 +112,11 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
               <MenuIcon />
             </Button>
             <span className="font-heading text-base font-semibold md:hidden">Txat_bot</span>
+            {page === null && chat.conversationId && (
+              <span className="hidden sm:flex">
+                <PersonalityBadge personality={chat.personality} />
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1">
             <ModelSelect
@@ -101,13 +142,32 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
             </Button>
           </div>
         </header>
-        <MessageList messages={chat.messages} loading={chat.isLoading} />
-        <Composer
-          onSend={(content) => void chat.send(content, selected)}
-          onStop={chat.stop}
-          isStreaming={chat.isStreaming}
-          disabled={!selected || chat.isLoading}
-        />
+        {page === 'personalities' ? (
+          <PersonalitiesPage store={personalities} models={models} />
+        ) : (
+          <>
+            {isNewChat ? (
+              <div className="flex-1 overflow-y-auto">
+                <div className="mx-auto w-full max-w-3xl px-4 py-6">
+                  <PersonalityPicker
+                    personalities={personalities.personalities}
+                    value={personalityId}
+                    onChange={choosePersonality}
+                    models={models}
+                  />
+                </div>
+              </div>
+            ) : (
+              <MessageList messages={chat.messages} loading={chat.isLoading} />
+            )}
+            <Composer
+              onSend={(content) => void chat.send(content, selected, personalityId)}
+              onStop={chat.stop}
+              isStreaming={chat.isStreaming}
+              disabled={!selected || chat.isLoading}
+            />
+          </>
+        )}
       </div>
     </div>
   );

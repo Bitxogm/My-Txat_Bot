@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MessageSquarePlusIcon, Trash2Icon } from 'lucide-react';
+import { MessageSquarePlusIcon, Trash2Icon, VenetianMaskIcon } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,7 +21,16 @@ interface ConversationSidebarProps {
   onSelect: (id: string) => void;
   onNew: () => void;
   onDelete: (id: string) => void;
+  /** Settings pages linked at the bottom; `activePage` highlights the open one. */
+  onOpenPage: (page: SettingsPage) => void;
+  activePage: SettingsPage | null;
 }
+
+export type SettingsPage = 'personalities';
+
+const SETTINGS_LINKS: { page: SettingsPage; label: string; icon: typeof VenetianMaskIcon }[] = [
+  { page: 'personalities', label: 'Personalidades', icon: VenetianMaskIcon },
+];
 
 export function ConversationSidebar({
   conversations,
@@ -30,6 +39,8 @@ export function ConversationSidebar({
   onSelect,
   onNew,
   onDelete,
+  onOpenPage,
+  activePage,
 }: ConversationSidebarProps) {
   const [pendingDelete, setPendingDelete] = useState<Conversation | null>(null);
 
@@ -83,6 +94,24 @@ export function ConversationSidebar({
             })}
           </ul>
         )}
+      </div>
+      <div className="border-t p-2">
+        <p className="text-muted-foreground px-2 pb-1 text-xs font-medium">Configuración</p>
+        {SETTINGS_LINKS.map(({ page, label, icon: Icon }) => (
+          <button
+            key={page}
+            type="button"
+            onClick={() => onOpenPage(page)}
+            aria-current={activePage === page ? 'page' : undefined}
+            className={cn(
+              'hover:bg-muted flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm',
+              activePage === page && 'bg-muted font-medium',
+            )}
+          >
+            <Icon className="size-4" aria-hidden="true" />
+            {label}
+          </button>
+        ))}
       </div>
       <AlertDialog
         open={pendingDelete !== null}

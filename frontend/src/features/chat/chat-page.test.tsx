@@ -8,9 +8,11 @@ import {
   getConversation,
   listConversations,
   listModels,
+  listPersonalities,
   sendMessage,
   type Conversation,
   type ModelsResponse,
+  type Personality,
   type StreamChatOptions,
 } from '@/lib/api';
 import { notifyError } from '@/lib/notify-error';
@@ -20,6 +22,7 @@ vi.mock('@/lib/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api')>()),
   listModels: vi.fn(),
   listConversations: vi.fn(),
+  listPersonalities: vi.fn(),
   createConversation: vi.fn(),
   getConversation: vi.fn(),
   deleteConversation: vi.fn(),
@@ -51,7 +54,14 @@ const MODELS: ModelsResponse = {
 
 function conversation(id: string, title: string, model = 'a:7b'): Conversation {
   const at = '2026-11-20T10:00:00+00:00';
-  return { id, title, model, created_at: at, updated_at: at };
+  return {
+    id,
+    title,
+    model,
+    created_at: at,
+    updated_at: at,
+    personality: { id: 'builtin-pentester', name: 'Pentester', icon: 'crosshair' },
+  };
 }
 
 const OLD = conversation('c'.repeat(32), 'Notas de un CTF');
@@ -72,8 +82,32 @@ function messageBox() {
   return screen.getByRole('textbox', { name: 'Mensaje' });
 }
 
+function personality(id: string, name: string, extra: Partial<Personality> = {}): Personality {
+  return {
+    id,
+    name,
+    icon: 'bot',
+    description: `Descripción de ${name}`,
+    system_prompt: 'x',
+    temperature: null,
+    top_p: null,
+    num_ctx: null,
+    default_model: null,
+    builtin: true,
+    created_at: '',
+    updated_at: '',
+    ...extra,
+  };
+}
+
+const PERSONALITIES = [
+  personality('builtin-mentor-ctf', 'Mentor CTF'),
+  personality('builtin-pentester', 'Pentester', { default_model: 'a:7b' }),
+];
+
 beforeEach(() => {
   vi.mocked(listModels).mockResolvedValue(MODELS);
+  vi.mocked(listPersonalities).mockResolvedValue({ personalities: PERSONALITIES });
   vi.mocked(listConversations).mockResolvedValue({ conversations: [OLD] });
   vi.mocked(createConversation).mockResolvedValue(conversation('n'.repeat(32), 'Nueva', 'b:8b'));
 });
@@ -103,7 +137,10 @@ describe('ChatPage', () => {
     await user.type(messageBox(), 'hola{Enter}');
 
     expect(await screen.findByText('Hola')).toBeInTheDocument();
-    expect(createConversation).toHaveBeenCalledWith({ model: 'b:8b' });
+    expect(createConversation).toHaveBeenCalledWith({
+      model: 'b:8b',
+      personality_id: 'builtin-mentor-ctf',
+    });
     expect(sendMessage).toHaveBeenCalledWith(
       'n'.repeat(32),
       { content: 'hola', model: 'b:8b' },
@@ -197,7 +234,7 @@ describe('ChatPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Nueva conversación' }));
 
-    expect(screen.getByText('Escribe un mensaje para empezar.')).toBeInTheDocument();
+    expect(await screen.findByRole('radio', { name: /Mentor CTF/ })).toBeChecked();
   });
 
   it('deletes a conversation after confirming', async () => {
@@ -252,5 +289,51 @@ describe('ChatPage', () => {
       expect(screen.getByRole('combobox', { name: 'Modelo' })).toHaveValue('b:8b'),
     );
     expect(messageBox()).toBeEnabled();
+  });
+});
+
+describe('ChatPage personalities', () => {
+  it('starts a new chat with Mentor CTF selected', async () => {
+    await renderReady();
+
+    expect(await screen.findByRole('radio', { name: /Mentor CTF/ })).toBeChecked();
+    expect(screen.getByRole('radio', { name: /Pentester/ })).not.toBeChecked();
+  });
+
+  it('creates the conversation with the chosen personality and its default model', async () => {
+    vi.mocked(sendMessage).mockResolvedValue({ model: 'a:7b', content: '' });
+    const { user, select } = await renderReady();
+
+    await user.click(await screen.findByRole('radio', { name: /Pentester/ }));
+    expect(select).toHaveValue('a:7b');
+    await user.type(messageBox(), 'hola{Enter}');
+
+    await waitFor(() =>
+      expect(createConversation).toHaveBeenCalledWith({
+        model: 'a:7b',
+        personality_id: 'builtin-pentester',
+      }),
+    );
+    expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
+  });
+
+  it('shows the personality of an opened conversation, read-only', async () => {
+    vi.mocked(getConversation).mockResolvedValue({ ...OLD, messages: [] });
+    const { user } = await renderReady();
+
+    await user.click(await screen.findByRole('button', { name: 'Notas de un CTF' }));
+
+    const badge = await screen.findByTitle('Personalidad fijada al crear esta conversación');
+    expect(badge).toHaveTextContent('Pentester');
+    expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
+  });
+
+  it('opens the personalities page from the sidebar', async () => {
+    const { user } = await renderReady();
+
+    await user.click(screen.getByRole('button', { name: 'Personalidades' }));
+
+    expect(await screen.findByRole('heading', { name: 'Personalidades' })).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Mensaje' })).not.toBeInTheDocument();
   });
 });
