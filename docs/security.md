@@ -26,6 +26,11 @@
 - **Cookies por host, no por puerto**: otra app del mismo host bajo `/api` recibiría la cookie. Usar un nombre de host propio (MagicDNS) lo evita.
 - **Docs de la API**: con `APP_ENV=development` `/api/docs` y `/api/openapi.json` son públicos. En el despliegue real, `APP_ENV=production`.
 
+## Modelos en la nube
+- Opcionales (`CLOUD_API_KEY` en `backend/.env`, ADR-012). Lo que se escribe en una conversación con un modelo del grupo "Nube" sale de la red hacia el proveedor (Groq por defecto); los modelos locales no.
+- La clave va como `SecretStr`, solo en la cabecera `Authorization` del cliente HTTP del adaptador, y nunca se loguea (los errores del proveedor se registran sin cabeceras).
+- No usar modelos en la nube para datos sensibles de un cliente o de un pentest real: para eso, modelos locales.
+
 ## Repositorio público
 - Nunca se suben secretos, `.env`, bases de datos, uploads, modelos ni datos personales.
 - Solo se versionan los `.env.example` con valores vacíos o de ejemplo.

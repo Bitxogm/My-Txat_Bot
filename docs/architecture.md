@@ -35,7 +35,7 @@ backend/app/
   adapters/          implementaciones (ollama, sqlite, chroma)
 ```
 
-- El modelo no está acoplado: `LLMProvider` define el contrato y `OllamaProvider` lo implementa.
+- El modelo no está acoplado: `LLMProvider` define el contrato; `OllamaProvider` (local) y `OpenAICompatibleProvider` (Groq u otro, opcional) lo implementan, y `RoutingLLMProvider` los junta en una sola lista de modelos (los remotos con prefijo `<CLOUD_NAME>/`).
 - Acceso a datos con repository pattern.
 
 ## Autenticación
@@ -60,7 +60,7 @@ Requieren sesión. Persisten en SQLite (`data/txatbot.db`) vía `ConversationRep
 
 Requiere sesión (401 sin cookie válida). `/api/chat` es la variante sin estado (el cliente manda todo el historial y no se guarda nada).
 
-- `GET /api/models`: modelos disponibles en Ollama (`name`, `size_bytes`, `family`, `parameter_size`, `quantization`) y `default_model`.
+- `GET /api/models`: modelos de Ollama y, si hay `CLOUD_API_KEY`, los del proveedor en la nube (`name`, `size_bytes`, `family`, `parameter_size`, `quantization`, `remote`) y `default_model`. Si un proveedor falla, se devuelven los del otro.
 - `POST /api/chat` con `{ "model"?: string, "messages": [{ "role": "system"|"user"|"assistant", "content": string }] }`. Si no se indica `model` se usa `DEFAULT_MODEL`.
 - Respuesta `text/event-stream`:
   - `event: token` / `data: {"content": "..."}` por cada fragmento.
