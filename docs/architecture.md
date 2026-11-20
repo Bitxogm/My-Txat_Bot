@@ -59,11 +59,11 @@ Requieren sesión. `system prompt = capa base (domain/prompts.py) + personalidad
 Requiere sesión.
 
 - `GET /api/osint-sources?category=` → `{ sources: [...] }`: incorporadas (`builtin: true`, ids `osint-*`) primero.
-- `POST /api/osint-sources` → 201 (siempre `builtin: false`).
-- `PUT /api/osint-sources/{id}`: sustitución completa en las propias; en una incorporada solo puede cambiar `is_active` (cualquier otro campo distinto → 403 `OSINT_SOURCE_BUILTIN`).
+- `POST /api/osint-sources` → 201 (siempre `builtin: false`; máximo 100 propias → 409 `OSINT_SOURCE_LIMIT`).
+- `PUT /api/osint-sources/{id}`: sustitución completa (`is_active` obligatorio) en las propias; en una incorporada solo puede cambiar `is_active` (cualquier otro campo distinto → 403 `OSINT_SOURCE_BUILTIN`).
 - `POST /api/osint-sources/{id}/toggle`: activa o desactiva (también incorporadas).
 - `DELETE /api/osint-sources/{id}`: solo las propias (incorporada → 403).
-- Campos: `name` (1-60, una línea), `url` (`http(s)`, ≤300, sin credenciales), `category`, `description` (≤200, una línea), `requires_api_key`, `requires_payment`, `is_active`.
+- Campos: `name` (1-60, una línea), `url` (`http(s)`, ASCII, dominio DNS público, ≤300, sin credenciales), `category`, `description` (≤200, una línea), `requires_api_key`, `requires_payment`, `is_active`.
 - Las fuentes activas se inyectan en el prompt del Auditor de Huella Digital en cada turno.
 
 ## Conversaciones

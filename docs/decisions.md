@@ -72,7 +72,10 @@ Registro corto de decisiones de arquitectura. Formato: contexto, decisión, cons
   - El prompt del Auditor (`builtin-auditor-huella`) recibe en cada turno las fuentes activas agrupadas por categoría (las categorías vacías no aparecen), como bloque de datos de referencia `<catalogo_osint>` entre la personalidad y el recordatorio final. El catálogo no forma parte del snapshot de la conversación: es conocimiento, no comportamiento.
 - **Consecuencias**:
   - Actualizar fuentes no toca la personalidad, y al revés.
-  - Nombres, URLs y descripciones entran en el system prompt: se validan al guardar (una línea, sin `<>` ni caracteres de control; URL `http(s)` con host y sin credenciales) y se vuelven a limpiar al componer el prompt.
+  - Nombres, URLs y descripciones entran en el system prompt: se validan al guardar (NFKC, una línea, sin `<>`, backticks ni caracteres invisibles, bidi, de control o de uso privado; URL `http(s)` en ASCII imprimible, con dominio DNS válido —IDN en punycode—, puerto válido, sin credenciales, sin IPs ni `localhost`) y se vuelven a limpiar al componer el prompt.
+  - Límites para no desplazar la capa base ni la conversación (el Auditor usa `num_ctx` 8192): máximo 100 fuentes propias (409 `OSINT_SOURCE_LIMIT`) y bloque de catálogo de 6000 caracteres como máximo; si no cabe todo, las incorporadas tienen prioridad y se indica cuántas se omiten.
+  - `PUT` es sustitución completa: `is_active` es obligatorio, para que omitirlo no reactive una fuente apagada. El toggle es una sola sentencia atómica.
+  - No reutilizar el id de una incorporada retirada: el seed la volvería a marcar como incorporada y pisaría las ediciones del usuario.
   - Las copias del Auditor no reciben el catálogo (se identifica por id).
   - `requires_payment` es booleano: las fuentes freemium van con `false` y "Freemium" en la descripción.
   - Las migraciones siguen en `adapters/sqlite/database.py` (lista `MIGRATIONS`), no en una carpeta aparte.
