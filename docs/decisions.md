@@ -38,3 +38,8 @@ Registro corto de decisiones de arquitectura. Formato: contexto, decisión, cons
 ## ADR-009: uv para dependencias Python
 - **Decisión**: el backend gestiona dependencias con uv (`pyproject.toml` + `uv.lock` commiteado). La CI instala con `uv sync --locked`.
 - **Consecuencias**: entornos reproducibles en local, CI y Docker. Ruff y pytest usan las versiones fijadas en el lock.
+
+## ADR-010: Streaming de chat con SSE sobre POST
+- **Decisión**: `POST /api/chat` responde `text/event-stream` con eventos `token`, `done` y `error`. El frontend lo lee con `fetch` + `ReadableStream` (no `EventSource`, que solo admite GET).
+- **Motivo**: el historial va en el cuerpo; SSE es más simple que WebSocket y pasa bien por nginx (`X-Accel-Buffering: no`).
+- **Consecuencias**: los errores previos al primer token son JSON normales con su status HTTP; los posteriores llegan como evento `error`.
