@@ -1,65 +1,149 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { isAbortError, streamChat, type ChatMessage } from '@/lib/api';
+import {
+  createConversation,
+  getConversation,
+  isAbortError,
+  sendMessage,
+  type Conversation,
+  type MessageStatus as StoredStatus,
+  type StoredMessage,
+} from '@/lib/api';
 import { notifyError } from '@/lib/notify-error';
 
-export type MessageStatus = 'done' | 'streaming' | 'stopped' | 'error';
+export type MessageStatus = StoredStatus | 'streaming';
 
 export interface UiMessage {
-  id: number;
+  id: string;
   role: 'user' | 'assistant';
   content: string;
   status: MessageStatus;
 }
 
+export interface UseChatOptions {
+  /** Called after a conversation is created or receives a new turn (to refresh the sidebar). */
+  onActivity?: () => void;
+}
+
 export interface UseChat {
+  conversationId: string | null;
   messages: UiMessage[];
   isStreaming: boolean;
+  isLoading: boolean;
+  open: (id: string) => Promise<Conversation | null>;
+  startNew: () => void;
   send: (content: string, model: string) => Promise<void>;
   stop: () => void;
-  reset: () => void;
 }
 
-function toHistory(messages: UiMessage[]): ChatMessage[] {
-  // Failed or empty turns are not sent back to the model.
-  return messages
-    .filter((m) => m.status !== 'error' && m.content.trim() !== '')
-    .map(({ role, content }) => ({ role, content }));
+function fromStored(message: StoredMessage): UiMessage | null {
+  if (message.role === 'system') return null;
+  return {
+    id: `s${message.id}`,
+    role: message.role,
+    content: message.content,
+    status: message.status,
+  };
 }
 
-export function useChat(): UseChat {
+export function useChat({ onActivity }: UseChatOptions = {}): UseChat {
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
-  const controllerRef = useRef<AbortController | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const streamRef = useRef<AbortController | null>(null);
+  const loadRef = useRef<AbortController | null>(null);
+  const conversationRef = useRef<string | null>(null);
   // crypto.randomUUID needs a secure context, which plain-HTTP LAN access is not.
   const nextId = useRef(0);
+  const onActivityRef = useRef(onActivity);
 
-  useEffect(() => () => controllerRef.current?.abort(), []);
+  useEffect(() => {
+    onActivityRef.current = onActivity;
+  }, [onActivity]);
 
-  const updateMessage = useCallback((id: number, update: (m: UiMessage) => UiMessage) => {
+  useEffect(
+    () => () => {
+      streamRef.current?.abort();
+      loadRef.current?.abort();
+    },
+    [],
+  );
+
+  const select = useCallback((id: string | null) => {
+    conversationRef.current = id;
+    setConversationId(id);
+  }, []);
+
+  const updateMessage = useCallback((id: string, update: (m: UiMessage) => UiMessage) => {
     setMessages((prev) => prev.map((m) => (m.id === id ? update(m) : m)));
   }, []);
+
+  const stop = useCallback(() => streamRef.current?.abort(), []);
+
+  const startNew = useCallback(() => {
+    streamRef.current?.abort();
+    loadRef.current?.abort();
+    select(null);
+    setMessages([]);
+    setIsLoading(false);
+  }, [select]);
+
+  const open = useCallback(
+    async (id: string) => {
+      // Leaving a reply in progress stops it; the server saves it as "stopped".
+      streamRef.current?.abort();
+      loadRef.current?.abort();
+      const controller = new AbortController();
+      loadRef.current = controller;
+      select(id);
+      setMessages([]);
+      setIsLoading(true);
+      try {
+        const detail = await getConversation(id, controller.signal);
+        setMessages(detail.messages.map(fromStored).filter((m) => m !== null));
+        return detail;
+      } catch (error) {
+        if (isAbortError(error)) return null;
+        notifyError(error);
+        select(null);
+        return null;
+      } finally {
+        if (loadRef.current === controller) {
+          loadRef.current = null;
+          setIsLoading(false);
+        }
+      }
+    },
+    [select],
+  );
 
   const send = useCallback(
     async (content: string, model: string) => {
       const text = content.trim();
-      if (!text || controllerRef.current) return;
+      if (!text || streamRef.current) return;
 
-      const user: UiMessage = { id: nextId.current++, role: 'user', content: text, status: 'done' };
-      const assistantId = nextId.current++;
-      const history = [...toHistory(messages), { role: 'user' as const, content: text }];
-
-      setMessages((prev) => [
-        ...prev,
-        user,
-        { id: assistantId, role: 'assistant', content: '', status: 'streaming' },
-      ]);
       const controller = new AbortController();
-      controllerRef.current = controller;
+      streamRef.current = controller;
       setIsStreaming(true);
 
+      const userId = `l${nextId.current++}`;
+      const assistantId = `l${nextId.current++}`;
+      setMessages((prev) => [
+        ...prev,
+        { id: userId, role: 'user', content: text, status: 'done' },
+        { id: assistantId, role: 'assistant', content: '', status: 'streaming' },
+      ]);
+
       try {
-        await streamChat(
-          { model, messages: history },
+        let id = conversationRef.current;
+        if (!id) {
+          id = (await createConversation({ model })).id;
+          select(id);
+          onActivityRef.current?.();
+        }
+        await sendMessage(
+          id,
+          { content: text, model },
           {
             signal: controller.signal,
             onToken: (token) =>
@@ -75,19 +159,13 @@ export function useChat(): UseChat {
           updateMessage(assistantId, (m) => ({ ...m, status: 'error' }));
         }
       } finally {
-        controllerRef.current = null;
+        if (streamRef.current === controller) streamRef.current = null;
         setIsStreaming(false);
+        onActivityRef.current?.();
       }
     },
-    [messages, updateMessage],
+    [select, updateMessage],
   );
 
-  const stop = useCallback(() => controllerRef.current?.abort(), []);
-
-  const reset = useCallback(() => {
-    controllerRef.current?.abort();
-    setMessages([]);
-  }, []);
-
-  return { messages, isStreaming, send, stop, reset };
+  return { conversationId, messages, isStreaming, isLoading, open, startNew, send, stop };
 }

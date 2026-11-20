@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
   getMe,
+  listConversations,
   listModels,
   login,
   logout,
@@ -26,6 +27,7 @@ vi.mock('@/lib/api', async (importOriginal) => ({
   login: vi.fn(),
   logout: vi.fn(),
   listModels: vi.fn(),
+  listConversations: vi.fn(),
   setUnauthorizedHandler: vi.fn(() => () => undefined),
 }));
 vi.mock('sonner', async (importOriginal) => ({
@@ -41,6 +43,7 @@ const unauthorized = () => apiError('unauthorized', 401, 'UNAUTHORIZED', 'Sesió
 
 beforeEach(() => {
   vi.mocked(listModels).mockResolvedValue({ models: [], default_model: null });
+  vi.mocked(listConversations).mockResolvedValue({ conversations: [] });
 });
 
 afterEach(() => {

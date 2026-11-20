@@ -7,7 +7,13 @@ const STATUS_NOTE: Partial<Record<UiMessage['status'], string>> = {
   error: 'No se pudo completar la respuesta.',
 };
 
-export function MessageList({ messages }: { messages: UiMessage[] }) {
+export function MessageList({
+  messages,
+  loading = false,
+}: {
+  messages: UiMessage[];
+  loading?: boolean;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -24,7 +30,9 @@ export function MessageList({ messages }: { messages: UiMessage[] }) {
       className="flex-1 overflow-y-auto"
     >
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6">
-        {messages.length === 0 ? (
+        {loading ? (
+          <p className="text-muted-foreground mt-24 text-center text-sm">Cargando conversación…</p>
+        ) : messages.length === 0 ? (
           <p className="text-muted-foreground mt-24 text-center text-sm">
             Escribe un mensaje para empezar.
           </p>
