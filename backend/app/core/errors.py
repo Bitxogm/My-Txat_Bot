@@ -64,6 +64,12 @@ class BuiltinOsintSourceError(AppError):
     message = "Las fuentes incorporadas no se pueden editar ni borrar; solo activar o desactivar."
 
 
+class OsintSourceLimitError(AppError):
+    status_code = HTTPStatus.CONFLICT
+    code = "OSINT_SOURCE_LIMIT"
+    message = "Has llegado al máximo de fuentes propias. Borra o reutiliza alguna."
+
+
 class BadRequestError(AppError):
     status_code = HTTPStatus.BAD_REQUEST
     code = "BAD_REQUEST"

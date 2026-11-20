@@ -121,7 +121,7 @@ BUILTIN_OSINT_SOURCES: dict[str, OsintSourceFields] = {
     ),
     "osint-git-hound": OsintSourceFields(
         "git-hound",
-        "https://github.com/rtcatc/git-hound",
+        "https://github.com/tillson/git-hound",
         "code",
         "CLI: emails y secretos en repositorios públicos.",
     ),

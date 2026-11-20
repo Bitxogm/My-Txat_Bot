@@ -109,6 +109,22 @@ class SqliteOsintSourceRepository:
         await self._db.commit()
         return await self.get(source_id) if cursor.rowcount else None
 
+    async def toggle(self, source_id: str) -> OsintSource | None:
+        # One statement: two concurrent toggles can't both read the same old value.
+        cursor = await self._db.execute(
+            "UPDATE osint_sources SET is_active = 1 - is_active, updated_at = ? WHERE id = ?",
+            (_now(), source_id),
+        )
+        await self._db.commit()
+        return await self.get(source_id) if cursor.rowcount else None
+
+    async def count_custom(self) -> int:
+        async with self._db.execute(
+            "SELECT COUNT(*) FROM osint_sources WHERE builtin = 0"
+        ) as cursor:
+            row = await cursor.fetchone()
+        return int(row[0]) if row else 0
+
     async def delete(self, source_id: str) -> bool:
         cursor = await self._db.execute(
             "DELETE FROM osint_sources WHERE id = ? AND builtin = 0", (source_id,)
