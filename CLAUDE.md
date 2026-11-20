@@ -8,7 +8,7 @@ Chatbot personal 100 % local sobre Ollama, con personalidad configurable y orien
 ## Stack
 - **Backend**: Python 3.12, FastAPI (async), pydantic-settings, Ruff, pytest. SQLite; ChromaDB solo con RAG.
 - **Frontend**: Vite, React, TypeScript (strict), Tailwind, shadcn/ui, Sonner, vite-plugin-pwa, ESLint, Prettier, Vitest.
-- **Modelos**: Ollama, servicio aparte. El backend lo alcanza por `OLLAMA_BASE_URL` (nombre Tailscale del host, puerto 11434).
+- **Modelos**: Ollama, servicio aparte. El backend lo alcanza por `OLLAMA_BASE_URL` (nombre Tailscale del host, puerto 11434). Opcional: proveedor en la nube compatible con OpenAI (Groq gratuito, `CLOUD_*`, ADR-012).
 - **Infra**: Docker Compose. Perfil `ollama` para levantar Ollama local con GPU NVIDIA.
 
 ## Estructura
@@ -43,7 +43,7 @@ Dependencias Python con uv (`uv add`), siempre con `uv.lock` commiteado.
 
 ## Reglas de código
 - Backend: todo async; tipado completo; nada de `print`, usar el logger. Config solo vía `core/config.py` (pydantic-settings), nunca `os.environ` suelto.
-- El modelo se usa a través del puerto `LLMProvider`. Nada de llamar a Ollama fuera de `adapters/ollama`.
+- El modelo se usa a través del puerto `LLMProvider` (`RoutingLLMProvider` reparte entre Ollama y la nube). Nada de llamar a Ollama fuera de `adapters/ollama` ni a la nube fuera de `adapters/openai_compat`.
 - Frontend: prohibido `fetch` fuera de `src/lib/api` (lo bloquea ESLint). Componentes de `components/ui/` no se editan a mano salvo necesidad.
 - Sin `any` en TypeScript. Sin secretos ni URLs fijas en el código.
 - Las decisiones de arquitectura nuevas se registran como ADR en `docs/decisions.md`.

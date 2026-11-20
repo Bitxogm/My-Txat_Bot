@@ -2,7 +2,7 @@
 
 Registro corto de decisiones de arquitectura. Formato: contexto, decisión, consecuencias. Las nuevas van al final.
 
-## ADR-001: Todo en local con Ollama
+## ADR-001: Todo en local con Ollama (matizado por ADR-012)
 - **Contexto**: privacidad, sin censura, sin coste por uso.
 - **Decisión**: modelos servidos por Ollama en hardware propio.
 - **Consecuencias**: el tamaño del modelo lo limita la VRAM (12 GB hoy).
@@ -48,3 +48,8 @@ Registro corto de decisiones de arquitectura. Formato: contexto, decisión, cons
 - **Decisión**: el cliente solo envía el mensaje nuevo (`POST /api/conversations/{id}/messages`); el backend guarda el turno y monta el historial desde SQLite. `/api/chat` se mantiene sin estado.
 - **Motivo**: el historial no depende de lo que mande el navegador y la respuesta se guarda aunque el cliente corte (se marca `stopped`).
 - **Consecuencias**: una sola conexión aiosqlite en modo WAL (un usuario). Para hacer backup en caliente no basta con copiar `txatbot.db`: hay que copiar también `-wal` o usar `sqlite3 data/txatbot.db ".backup copia.db"`.
+
+## ADR-012: Modelos híbridos, local + nube gratuita (Groq)
+- **Contexto**: los modelos que caben en la GPU (≈9B en la GTX 1070, ≈14B en la RTX 3060) inventan flags y rutas en comandos de pentesting. La API de Claude es de pago y Gemini rechaza demasiadas consultas legítimas de CTF.
+- **Decisión**: además de Ollama, un proveedor opcional con API compatible con OpenAI (`CLOUD_*` en `backend/.env`), por defecto Groq en su plan gratuito (modelos de 70-120B). `RoutingLLMProvider` junta los dos detrás de `LLMProvider`; los modelos remotos se llaman `<CLOUD_NAME>/<id>` y el selector los separa en el grupo "Nube".
+- **Consecuencias**: lo escrito a un modelo en la nube sale de la red y queda sujeto a las condiciones del proveedor; los locales siguen igual (ADR-001). Sin `CLOUD_API_KEY` todo es local. Cambiar de proveedor (OpenRouter, Cerebras) es solo configuración. Los límites del plan gratuito (≈1.000 peticiones/día por modelo) se notan como 429 `MODEL_RATE_LIMITED`.
