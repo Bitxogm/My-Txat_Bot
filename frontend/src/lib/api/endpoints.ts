@@ -11,6 +11,9 @@ import type {
   LoginRequest,
   MeResponse,
   ModelsResponse,
+  Personality,
+  PersonalityInput,
+  PersonalityList,
 } from './types';
 
 export function getHealth(signal?: AbortSignal): Promise<HealthResponse> {
@@ -107,7 +110,10 @@ export function listConversations(signal?: AbortSignal): Promise<ConversationLis
   return request<ConversationList>('/conversations', { signal });
 }
 
-export function createConversation(body: { model?: string }): Promise<Conversation> {
+export function createConversation(body: {
+  model?: string;
+  personality_id?: string;
+}): Promise<Conversation> {
   return request<Conversation>('/conversations', { method: 'POST', body });
 }
 
@@ -138,4 +144,32 @@ export function sendMessage(
     body.model ?? '',
     options,
   );
+}
+
+export function listPersonalities(signal?: AbortSignal): Promise<PersonalityList> {
+  return request<PersonalityList>('/personalities', { signal });
+}
+
+export function createPersonality(body: PersonalityInput): Promise<Personality> {
+  return request<Personality>('/personalities', { method: 'POST', body });
+}
+
+export function updatePersonality(
+  id: string,
+  body: Partial<PersonalityInput>,
+): Promise<Personality> {
+  return request<Personality>(`/personalities/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body,
+  });
+}
+
+export async function deletePersonality(id: string): Promise<void> {
+  await send(`/personalities/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export function duplicatePersonality(id: string): Promise<Personality> {
+  return request<Personality>(`/personalities/${encodeURIComponent(id)}/duplicate`, {
+    method: 'POST',
+  });
 }

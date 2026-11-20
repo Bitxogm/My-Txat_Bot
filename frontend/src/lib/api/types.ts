@@ -48,12 +48,22 @@ export interface MeResponse {
 
 export type MessageStatus = 'done' | 'stopped' | 'error';
 
+/** Snapshot of the personality a conversation was created with (read-only). */
+export interface PersonalityRef {
+  /** null if that personality has since been deleted. */
+  id: string | null;
+  name: string;
+  icon: string | null;
+}
+
 export interface Conversation {
   id: string;
   title: string;
   model: string;
   created_at: string;
   updated_at: string;
+  /** null for conversations created before personalities existed. */
+  personality: PersonalityRef | null;
 }
 
 export interface ConversationList {
@@ -70,4 +80,36 @@ export interface StoredMessage {
 
 export interface ConversationDetail extends Conversation {
   messages: StoredMessage[];
+}
+
+export interface Personality {
+  id: string;
+  name: string;
+  /** lucide icon name, e.g. "flag". */
+  icon: string;
+  description: string;
+  system_prompt: string;
+  temperature: number | null;
+  top_p: number | null;
+  num_ctx: number | null;
+  default_model: string | null;
+  builtin: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PersonalityList {
+  personalities: Personality[];
+}
+
+/** Editable fields. null parameters mean "use the model's default". */
+export interface PersonalityInput {
+  name: string;
+  icon: string;
+  description: string;
+  system_prompt: string;
+  temperature: number | null;
+  top_p: number | null;
+  num_ctx: number | null;
+  default_model: string | null;
 }
