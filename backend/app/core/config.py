@@ -4,6 +4,8 @@ from typing import Literal
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+MIN_SESSION_SECRET_LENGTH = 32
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
@@ -21,6 +23,11 @@ class Settings(BaseSettings):
     auth_username: str = ""
     auth_password_hash: SecretStr = SecretStr("")
     session_secret: SecretStr = SecretStr("")
+    session_ttl_hours: int = Field(default=72, gt=0)
+    # Only set to true when the app is served over HTTPS; browsers drop Secure cookies on HTTP.
+    cookie_secure: bool = False
+    login_max_failures: int = Field(default=5, gt=0)
+    login_window_seconds: int = Field(default=300, gt=0)
 
     cors_origins: str = "http://localhost:5173"
 
@@ -29,6 +36,14 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def auth_configured(self) -> bool:
+        return bool(
+            self.auth_username
+            and self.auth_password_hash.get_secret_value()
+            and len(self.session_secret.get_secret_value()) >= MIN_SESSION_SECRET_LENGTH
+        )
 
     @property
     def is_production(self) -> bool:

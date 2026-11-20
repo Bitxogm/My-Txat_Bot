@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from app.api.dependencies import get_llm_provider
 from app.core.errors import ModelNotFoundError, ModelUnavailableError
 from app.main import create_app
-from tests.conftest import FakeLLMProvider, make_settings
+from tests.conftest import FakeLLMProvider, log_in, make_settings
 
 USER_MESSAGE = {"role": "user", "content": "hola"}
 
@@ -45,6 +45,7 @@ async def test_uses_default_model(
     app.dependency_overrides[get_llm_provider] = lambda: fake_llm
 
     async with make_client(app) as c:
+        await log_in(c)
         response = await c.post("/api/chat", json={"messages": [USER_MESSAGE]})
 
     assert response.status_code == 200

@@ -2,7 +2,7 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.adapters.ollama.provider import (
@@ -10,7 +10,9 @@ from app.adapters.ollama.provider import (
     build_chat_timeout,
     build_ollama_client,
 )
-from app.api.routes import chat, health, models
+from app.api.dependencies import require_session
+from app.api.routes import auth, chat, health, models
+from app.core.auth import AuthService
 from app.core.config import Settings, get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging
@@ -46,6 +48,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     app.state.settings = settings
+    app.state.auth_service = AuthService(settings)
+    if not app.state.auth_service.is_configured:
+        logger.warning(
+            "Login not configured (AUTH_USERNAME, a valid argon2id AUTH_PASSWORD_HASH in single"
+            " quotes, SESSION_SECRET >= 32 chars): protected endpoints will answer 503"
+        )
     register_exception_handlers(app)
 
     app.add_middleware(
@@ -60,8 +68,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(RequestContextMiddleware)
 
     app.include_router(health.router, prefix="/api")
-    app.include_router(models.router, prefix="/api")
-    app.include_router(chat.router, prefix="/api")
+    app.include_router(auth.router, prefix="/api")
+    protected = [Depends(require_session)]
+    app.include_router(models.router, prefix="/api", dependencies=protected)
+    app.include_router(chat.router, prefix="/api", dependencies=protected)
     return app
 
 
