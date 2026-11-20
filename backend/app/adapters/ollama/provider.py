@@ -7,6 +7,7 @@ import httpx
 
 from app.core.errors import EmptyReplyError, ModelNotFoundError, ModelUnavailableError
 from app.domain.chat import ChatMessage, ModelInfo
+from app.domain.personality import GenerationParams
 
 logger = logging.getLogger(__name__)
 
@@ -51,13 +52,21 @@ class OllamaProvider:
             raise ModelUnavailableError("Respuesta no válida del servidor de modelos") from exc
         return [_to_model_info(raw) for raw in raw_models]
 
-    async def stream_chat(self, model: str, messages: Sequence[ChatMessage]) -> AsyncIterator[str]:
+    async def stream_chat(
+        self,
+        model: str,
+        messages: Sequence[ChatMessage],
+        params: GenerationParams | None = None,
+    ) -> AsyncIterator[str]:
         payload = {
             "model": model,
             "messages": [{"role": m.role, "content": m.content} for m in messages],
             "stream": True,
             "think": self._think,
         }
+        options = _ollama_options(params)
+        if options:
+            payload["options"] = options
         produced = False
         try:
             async with self._client.stream(
@@ -87,6 +96,14 @@ class OllamaProvider:
                         return
         except httpx.HTTPError as exc:
             raise _unavailable(exc) from exc
+
+
+def _ollama_options(params: GenerationParams | None) -> dict[str, float | int]:
+    """Ollama takes sampling parameters under "options"; None keeps the model's default."""
+    if params is None:
+        return {}
+    options = {"temperature": params.temperature, "top_p": params.top_p, "num_ctx": params.num_ctx}
+    return {key: value for key, value in options.items() if value is not None}
 
 
 def _check_finish(model: str, done_reason: object, produced: bool) -> None:

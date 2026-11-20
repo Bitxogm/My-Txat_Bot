@@ -18,6 +18,7 @@ from app.core.errors import (
     ModelUnavailableError,
 )
 from app.domain.chat import ChatMessage, ModelInfo
+from app.domain.personality import GenerationParams
 
 logger = logging.getLogger(__name__)
 
@@ -63,12 +64,24 @@ class OpenAICompatibleProvider:
             ids = [i for i in ids if not any(marker in i.lower() for marker in _NON_CHAT_MARKERS)]
         return [ModelInfo(name=i, size_bytes=0, remote=True) for i in ids]
 
-    async def stream_chat(self, model: str, messages: Sequence[ChatMessage]) -> AsyncIterator[str]:
-        payload = {
+    async def stream_chat(
+        self,
+        model: str,
+        messages: Sequence[ChatMessage],
+        params: GenerationParams | None = None,
+    ) -> AsyncIterator[str]:
+        payload: dict[str, object] = {
             "model": model,
             "messages": [{"role": m.role, "content": m.content} for m in messages],
             "stream": True,
         }
+        # temperature and top_p are top-level here; num_ctx has no equivalent in this API (the
+        # provider fixes the context window), so it is dropped on purpose.
+        if params is not None:
+            if params.temperature is not None:
+                payload["temperature"] = params.temperature
+            if params.top_p is not None:
+                payload["top_p"] = params.top_p
         produced = False
         try:
             async with self._client.stream(

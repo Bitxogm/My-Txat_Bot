@@ -11,6 +11,7 @@ from app.api.dependencies import get_llm_provider
 from app.core.config import Settings
 from app.core.errors import AppError
 from app.domain.chat import ChatMessage, ModelInfo
+from app.domain.personality import GenerationParams
 from app.main import create_app
 
 
@@ -22,6 +23,7 @@ class FakeLLMProvider:
         self.fail_before: AppError | None = None
         self.fail_after: AppError | None = None
         self.calls: list[tuple[str, list[ChatMessage]]] = []
+        self.params: list[GenerationParams | None] = []
 
     async def is_available(self) -> bool:
         return self.available
@@ -31,8 +33,14 @@ class FakeLLMProvider:
             raise self.fail_before
         return self.models
 
-    async def stream_chat(self, model: str, messages: Sequence[ChatMessage]) -> AsyncIterator[str]:
+    async def stream_chat(
+        self,
+        model: str,
+        messages: Sequence[ChatMessage],
+        params: GenerationParams | None = None,
+    ) -> AsyncIterator[str]:
         self.calls.append((model, list(messages)))
+        self.params.append(params)
         if self.fail_before:
             raise self.fail_before
         for chunk in self.chunks:

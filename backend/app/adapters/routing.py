@@ -5,6 +5,7 @@ from typing import Protocol
 
 from app.core.errors import AppError
 from app.domain.chat import ChatMessage, ModelInfo
+from app.domain.personality import GenerationParams
 from app.ports.llm import LLMProvider
 
 logger = logging.getLogger(__name__)
@@ -49,8 +50,13 @@ class RoutingLLMProvider:
             raise errors[0]
         return models
 
-    def stream_chat(self, model: str, messages: Sequence[ChatMessage]) -> AsyncIterator[str]:
+    def stream_chat(
+        self,
+        model: str,
+        messages: Sequence[ChatMessage],
+        params: GenerationParams | None = None,
+    ) -> AsyncIterator[str]:
         prefix, sep, rest = model.partition("/")
         if sep and prefix in self._remotes:
-            return self._remotes[prefix].stream_chat(rest, messages)
-        return self._local.stream_chat(model, messages)
+            return self._remotes[prefix].stream_chat(rest, messages, params)
+        return self._local.stream_chat(model, messages, params)
