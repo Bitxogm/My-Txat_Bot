@@ -29,8 +29,22 @@ vi.mock('@/lib/notify-error', () => ({ notifyError: vi.fn() }));
 
 const MODELS: ModelsResponse = {
   models: [
-    { name: 'a:7b', size_bytes: 1, family: null, parameter_size: '7B', quantization: 'Q4_K_M' },
-    { name: 'b:8b', size_bytes: 1, family: null, parameter_size: null, quantization: null },
+    {
+      name: 'a:7b',
+      size_bytes: 1,
+      family: null,
+      parameter_size: '7B',
+      quantization: 'Q4_K_M',
+      remote: false,
+    },
+    {
+      name: 'b:8b',
+      size_bytes: 1,
+      family: null,
+      parameter_size: null,
+      quantization: null,
+      remote: false,
+    },
   ],
   default_model: 'b:8b',
 };

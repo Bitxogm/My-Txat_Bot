@@ -11,6 +11,8 @@ export interface ModelInfo {
   family: string | null;
   parameter_size: string | null;
   quantization: string | null;
+  /** Runs on a third-party service: messages leave the local network. */
+  remote: boolean;
 }
 
 export interface ModelsResponse {

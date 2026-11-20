@@ -1,6 +1,10 @@
 import { RotateCwIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
+import {
+  NativeSelect,
+  NativeSelectOptGroup,
+  NativeSelectOption,
+} from '@/components/ui/native-select';
 import type { ModelInfo } from '@/lib/api';
 import type { ModelsStatus } from './use-models';
 
@@ -12,6 +16,11 @@ interface ModelSelectProps {
   onReload: () => void;
   disabled?: boolean;
 }
+
+const GROUPS = [
+  { label: 'Local', remote: false },
+  { label: 'Nube (sale de tu red)', remote: true },
+] as const;
 
 function describe(model: ModelInfo): string {
   const details = [model.parameter_size, model.quantization].filter(Boolean).join(' · ');
@@ -49,11 +58,18 @@ export function ModelSelect({
         {models.length === 0 ? (
           <NativeSelectOption value="">{placeholder}</NativeSelectOption>
         ) : (
-          models.map((model) => (
-            <NativeSelectOption key={model.name} value={model.name}>
-              {describe(model)}
-            </NativeSelectOption>
-          ))
+          GROUPS.map(({ label, remote }) => {
+            const group = models.filter((m) => m.remote === remote);
+            return group.length === 0 ? null : (
+              <NativeSelectOptGroup key={label} label={label}>
+                {group.map((model) => (
+                  <NativeSelectOption key={model.name} value={model.name}>
+                    {describe(model)}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelectOptGroup>
+            );
+          })
         )}
       </NativeSelect>
       <Button
