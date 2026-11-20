@@ -16,6 +16,7 @@ class ModelOut(BaseModel):
     family: str | None
     parameter_size: str | None
     quantization: str | None
+    remote: bool
 
 
 class ModelsResponse(BaseModel):
@@ -37,6 +38,7 @@ async def list_models(
                 family=m.family,
                 parameter_size=m.parameter_size,
                 quantization=m.quantization,
+                remote=m.remote,
             )
             for m in models
         ],

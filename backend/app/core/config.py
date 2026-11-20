@@ -19,6 +19,14 @@ class Settings(BaseSettings):
     ollama_think: bool = False
     default_model: str = ""
 
+    # Optional cloud provider with an OpenAI-compatible API (Groq by default). Off without a key.
+    cloud_name: str = Field(default="groq", pattern=r"^[a-z0-9-]{1,20}$")
+    cloud_base_url: str = "https://api.groq.com/openai/v1"
+    cloud_api_key: SecretStr = SecretStr("")
+    # Comma-separated allowlist of model ids; empty = every chat model the provider lists.
+    cloud_models: str = ""
+    cloud_timeout_seconds: float = Field(default=10.0, gt=0)
+
     database_url: str = "sqlite:///./data/txatbot.db"
 
     auth_username: str = ""
@@ -37,6 +45,14 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def cloud_enabled(self) -> bool:
+        return bool(self.cloud_api_key.get_secret_value())
+
+    @property
+    def cloud_model_list(self) -> list[str]:
+        return [m.strip() for m in self.cloud_models.split(",") if m.strip()]
 
     @property
     def auth_configured(self) -> bool:
