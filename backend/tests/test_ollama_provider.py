@@ -4,7 +4,7 @@ import httpx
 import pytest
 
 from app.adapters.ollama.provider import OllamaProvider
-from app.core.errors import ModelNotFoundError, ModelUnavailableError
+from app.core.errors import EmptyReplyError, ModelNotFoundError, ModelUnavailableError
 from app.domain.chat import ChatMessage, ModelInfo
 
 
@@ -95,6 +95,7 @@ async def test_stream_chat_yields_content_until_done() -> None:
         "model": "m",
         "messages": [{"role": "user", "content": "hola"}],
         "stream": True,
+        "think": False,
     }
 
 
@@ -121,3 +122,54 @@ async def test_stream_chat_unreachable() -> None:
 
     with pytest.raises(ModelUnavailableError):
         await collect(provider_with(httpx.MockTransport(refuse)))
+
+
+async def test_think_can_be_enabled() -> None:
+    seen: list[dict[str, object]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content))
+        return httpx.Response(200, content=ndjson({"message": {"content": "a"}, "done": True}))
+
+    provider = OllamaProvider(
+        httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://o.test"),
+        think=True,
+    )
+    await collect(provider)
+
+    assert seen[0]["think"] is True
+
+
+async def test_reply_with_only_thinking_is_an_empty_reply() -> None:
+    body = ndjson(
+        {"message": {"content": "", "thinking": "hmm"}, "done": False},
+        {"message": {"content": ""}, "done": True, "done_reason": "stop"},
+    )
+    provider = provider_with(httpx.MockTransport(lambda _: httpx.Response(200, content=body)))
+
+    with pytest.raises(EmptyReplyError) as exc:
+        await collect(provider)
+    assert exc.value.message == "El modelo no devolvió ninguna respuesta"
+
+
+async def test_length_limit_without_text_explains_why() -> None:
+    body = ndjson(
+        {"message": {"content": "", "thinking": "..."}, "done": False},
+        {"message": {"content": ""}, "done": True, "done_reason": "length"},
+    )
+    provider = provider_with(httpx.MockTransport(lambda _: httpx.Response(200, content=body)))
+
+    with pytest.raises(EmptyReplyError) as exc:
+        await collect(provider)
+    assert "límite de longitud" in exc.value.message
+    assert exc.value.status_code == 502
+
+
+async def test_truncated_reply_with_text_is_kept() -> None:
+    body = ndjson(
+        {"message": {"content": "parcial"}, "done": False},
+        {"message": {"content": ""}, "done": True, "done_reason": "length"},
+    )
+    provider = provider_with(httpx.MockTransport(lambda _: httpx.Response(200, content=body)))
+
+    assert await collect(provider) == ["parcial"]

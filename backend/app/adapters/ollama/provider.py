@@ -5,7 +5,7 @@ from typing import Any
 
 import httpx
 
-from app.core.errors import ModelNotFoundError, ModelUnavailableError
+from app.core.errors import EmptyReplyError, ModelNotFoundError, ModelUnavailableError
 from app.domain.chat import ChatMessage, ModelInfo
 
 logger = logging.getLogger(__name__)
@@ -15,10 +15,16 @@ class OllamaProvider:
     """LLMProvider implementation backed by the Ollama HTTP API."""
 
     def __init__(
-        self, client: httpx.AsyncClient, chat_timeout: httpx.Timeout | None = None
+        self,
+        client: httpx.AsyncClient,
+        chat_timeout: httpx.Timeout | None = None,
+        think: bool = False,
     ) -> None:
         self._client = client
         self._chat_timeout = chat_timeout or client.timeout
+        # Reasoning models (qwen3.5, deepseek-r1...) otherwise "think" for tens of seconds before
+        # the first visible word, and can spend the whole length budget without answering.
+        self._think = think
 
     async def is_available(self) -> bool:
         try:
@@ -50,7 +56,9 @@ class OllamaProvider:
             "model": model,
             "messages": [{"role": m.role, "content": m.content} for m in messages],
             "stream": True,
+            "think": self._think,
         }
+        produced = False
         try:
             async with self._client.stream(
                 "POST", "/api/chat", json=payload, timeout=self._chat_timeout
@@ -72,11 +80,26 @@ class OllamaProvider:
                         raise ModelUnavailableError("El modelo falló al generar la respuesta")
                     content = chunk.get("message", {}).get("content", "")
                     if content:
+                        produced = True
                         yield content
                     if chunk.get("done"):
+                        _check_finish(model, chunk.get("done_reason"), produced)
                         return
         except httpx.HTTPError as exc:
             raise _unavailable(exc) from exc
+
+
+def _check_finish(model: str, done_reason: object, produced: bool) -> None:
+    if done_reason == "length":
+        logger.warning("Ollama hit the length limit on %s (produced text: %s)", model, produced)
+    if produced:
+        return
+    if done_reason == "length":
+        raise EmptyReplyError(
+            "El modelo agotó el límite de longitud sin llegar a responder. Prueba con un"
+            " mensaje más corto o con el razonamiento desactivado (OLLAMA_THINK=false)."
+        )
+    raise EmptyReplyError
 
 
 def build_ollama_client(base_url: str, timeout_seconds: float) -> httpx.AsyncClient:

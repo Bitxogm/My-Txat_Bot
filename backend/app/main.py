@@ -33,7 +33,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         chat_timeout = build_chat_timeout(
             settings.ollama_timeout_seconds, settings.ollama_chat_read_timeout_seconds
         )
-        app.state.llm_provider = OllamaProvider(client, chat_timeout)
+        app.state.llm_provider = OllamaProvider(client, chat_timeout, think=settings.ollama_think)
         db = await connect(sqlite_path(settings.database_url))
         app.state.conversations = SqliteConversationRepository(db)
         logger.info("Backend started (env=%s)", settings.app_env)
