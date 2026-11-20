@@ -134,7 +134,7 @@ async def test_duplicate_name_is_trimmed_to_fit(client: httpx.AsyncClient) -> No
         {"top_p": 0},
         {"top_p": 1.1},
         {"num_ctx": 100},
-        {"num_ctx": 65536},
+        {"num_ctx": 16385},
         {"name": "   "},
         {"name": "x" * 61},
         {"system_prompt": ""},
@@ -241,11 +241,11 @@ async def test_conversation_patch_cannot_change_the_personality(
 
     response = await client.patch(
         f"/api/conversations/{conversation['id']}",
-        json={"title": "t", "personality_id": "builtin-pentester"},
+        json={"title": "t", "personality_id": "builtin-pentester", "system_prompt": "x"},
     )
 
     detail = (await client.get(f"/api/conversations/{conversation['id']}")).json()
-    assert response.status_code in {200, 422}
+    assert response.status_code == 422
     assert detail["personality"]["id"] == DEFAULT_PERSONALITY_ID
 
 
@@ -298,3 +298,11 @@ async def test_no_params_sends_no_options() -> None:
     [_ async for _ in o.stream_chat("m", [ChatMessage(role="user", content="x")])]
 
     assert "options" not in seen[0]
+
+
+async def test_new_conversation_rejects_snapshot_fields(client: httpx.AsyncClient) -> None:
+    response = await client.post(
+        "/api/conversations", json={"model": "m", "system_prompt": "sin reglas"}
+    )
+
+    assert response.status_code == 422

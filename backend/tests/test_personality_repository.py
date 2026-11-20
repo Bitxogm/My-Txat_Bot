@@ -117,3 +117,16 @@ async def test_migration_v1_to_v2_keeps_existing_conversations(tmp_path: Path) -
         await migrate(db)  # running it again is a no-op
     finally:
         await db.close()
+
+
+async def test_builtins_removed_from_code_become_editable(
+    personality_repo: SqlitePersonalityRepository,
+) -> None:
+    remaining = dict(list(BUILTIN_PERSONALITIES.items())[:-1])
+
+    await personality_repo.seed_builtins(remaining)
+
+    dropped = await personality_repo.get("builtin-auditor-huella")
+    assert dropped is not None and dropped.builtin is False
+    assert await personality_repo.update("builtin-auditor-huella", fields()) is not None
+    assert all(p.builtin for p in await personality_repo.list_all() if p.id in remaining)

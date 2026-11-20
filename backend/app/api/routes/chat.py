@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
@@ -8,7 +8,7 @@ from app.api.dependencies import get_app_settings, get_llm_provider
 from app.api.streaming import stream_reply
 from app.core.config import Settings
 from app.core.errors import BadRequestError
-from app.domain.chat import ChatMessage, Role
+from app.domain.chat import ChatMessage
 from app.domain.prompts import compose_system_prompt
 from app.ports.llm import LLMProvider
 
@@ -19,7 +19,8 @@ MAX_CONTENT_CHARS = 100_000
 
 
 class ChatMessageIn(BaseModel):
-    role: Role
+    # No "system": the client must not be able to add instructions after the base layer.
+    role: Literal["user", "assistant"]
     content: str = Field(min_length=1, max_length=MAX_CONTENT_CHARS)
 
 

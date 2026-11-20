@@ -3,7 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from app.api.dependencies import (
     get_app_settings,
@@ -99,6 +99,9 @@ class ConversationDetail(ConversationOut):
 
 
 class ConversationPatch(BaseModel):
+    # Only the title is editable; the personality snapshot can't be changed (ADR-013).
+    model_config = ConfigDict(extra="forbid")
+
     title: Annotated[
         str, StringConstraints(strip_whitespace=True, min_length=1, max_length=TITLE_MAX_CHARS)
     ]
@@ -110,6 +113,8 @@ class SendMessage(BaseModel):
 
 
 class NewConversation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     model: str | None = Field(default=None, min_length=1, max_length=200)
     personality_id: str | None = Field(default=None, pattern=PERSONALITY_ID_PATTERN)
 

@@ -113,4 +113,12 @@ class SqlitePersonalityRepository:
                 " builtin = 1, position = excluded.position, updated_at = excluded.updated_at",
                 (personality_id, *_values(fields), position, now, now),
             )
+        # A built-in removed from the code becomes a normal, editable personality instead of a
+        # read-only leftover (deleting it would also drop it from the user's list).
+        placeholders = ", ".join("?" for _ in builtins) or "''"
+        await self._db.execute(
+            f"UPDATE personalities SET builtin = 0, updated_at = ?"  # noqa: S608 - placeholders only
+            f" WHERE builtin = 1 AND id NOT IN ({placeholders})",
+            (now, *builtins),
+        )
         await self._db.commit()
