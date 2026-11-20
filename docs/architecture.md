@@ -38,7 +38,16 @@ backend/app/
 - El modelo no está acoplado: `LLMProvider` define el contrato y `OllamaProvider` lo implementa.
 - Acceso a datos con repository pattern.
 
+## Autenticación
+
+- `POST /api/auth/login` `{ username, password }` → 204 + cookie de sesión. 401 `INVALID_CREDENTIALS`, 429 `TOO_MANY_ATTEMPTS`, 503 `AUTH_NOT_CONFIGURED`.
+- `POST /api/auth/logout` (con sesión) → 204, borra la cookie e invalida todas las sesiones emitidas.
+- `GET /api/auth/me` → `{ username }` o 401 `UNAUTHORIZED`.
+- Detalles de seguridad en [security.md](security.md).
+
 ## API de chat
+
+Requiere sesión (401 sin cookie válida).
 
 - `GET /api/models`: modelos disponibles en Ollama (`name`, `size_bytes`, `family`, `parameter_size`, `quantization`) y `default_model`.
 - `POST /api/chat` con `{ "model"?: string, "messages": [{ "role": "system"|"user"|"assistant", "content": string }] }`. Si no se indica `model` se usa `DEFAULT_MODEL`.
