@@ -12,3 +12,4 @@ paths:
 - Acceso a SQLite solo vía repositorios (`app/adapters/sqlite`), nunca SQL en las rutas.
 - Cada ruta nueva lleva test en `backend/tests/` (httpx + pytest-asyncio). Ollama se mockea en tests.
 - Antes de dar algo por terminado: `uv sync --extra dev` (si cambió el lock) y `uv run ruff check . && uv run ruff format --check . && uv run pytest`.
+- Modelos con razonamiento: el adaptador manda `think` según `OLLAMA_THINK` (false por defecto) y lanza `EmptyReplyError` si el stream termina sin texto. No quitar ninguna de las dos cosas: con qwen3.5 en una GTX 1070 el razonamiento tardaba ~35 s por respuesta y a veces acababa vacío.
