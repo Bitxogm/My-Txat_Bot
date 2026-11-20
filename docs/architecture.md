@@ -73,7 +73,7 @@ frontend/src/
 - `GET /api/health` responde 200 si el backend está vivo e informa en el cuerpo si Ollama responde (Ollama caído no marca el contenedor como unhealthy).
 
 **Frontend**
-- Un solo cliente API que mapea códigos HTTP a errores tipados:
+- Un solo cliente API (`src/lib/api`: `request`, `getHealth`, `listModels`, `streamChat`) que lanza `ApiError` con `kind`, `status`, `code`, `message` y `requestId`. Mapea códigos HTTP a `kind`:
   - 400/422 → validación (mensaje en el formulario)
   - 401 → sesión caducada (redirige a login)
   - 403 → sin permiso
@@ -81,6 +81,9 @@ frontend/src/
   - 413 → fichero demasiado grande
   - 429 → demasiadas peticiones
   - 5xx / red → error genérico + toast (Sonner) con el `request_id`
+- 401 dispara el handler registrado con `setUnauthorizedHandler` (redirección a login).
+- `streamChat` lee el SSE con `fetch` + `ReadableStream`; un evento `error` o un corte sin `done` también lanzan `ApiError`. Las cancelaciones (`AbortSignal`) se relanzan tal cual (`isAbortError`).
+- `notifyError(error)` (`src/lib/notify-error.ts`) muestra el toast; ignora cancelaciones.
 
 **Docker**
 - Rotación de logs `json-file` (10 MB x 3) en todos los servicios.
