@@ -24,3 +24,5 @@ def configure_logging(level: str) -> None:
     # The request middleware logs each request with its request_id; uvicorn's access log would
     # duplicate it without one.
     logging.getLogger("uvicorn.access").disabled = True
+    # httpx logs every upstream request at INFO; keep only its warnings.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
