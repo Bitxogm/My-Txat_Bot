@@ -34,3 +34,7 @@ Registro corto de decisiones de arquitectura. Formato: contexto, decisión, cons
 
 ## ADR-008: Formato de error único
 - **Decisión**: todas las respuestas de error usan `{ "error": { code, message, request_id } }`. El frontend tiene un único cliente API que las interpreta.
+
+## ADR-009: uv para dependencias Python
+- **Decisión**: el backend gestiona dependencias con uv (`pyproject.toml` + `uv.lock` commiteado). La CI instala con `uv sync --locked`.
+- **Consecuencias**: entornos reproducibles en local, CI y Docker. Ruff y pytest usan las versiones fijadas en el lock.

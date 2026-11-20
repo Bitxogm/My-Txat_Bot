@@ -25,15 +25,17 @@ docker compose logs -f backend
 docker compose config                   # validar el compose
 
 # backend (desde backend/)
-ruff check . && ruff format --check .
-pytest
+uv sync --extra dev                     # entorno en backend/.venv desde uv.lock
+uv run uvicorn app.main:app --reload    # desarrollo local
+uv run ruff check . && uv run ruff format --check .
+uv run pytest
 
 # frontend (desde frontend/)
 npm run lint && npm run format:check
 npm run test
 npm run build
 ```
-Los scripts de npm y el entorno Python se crean en Fase 1.
+Dependencias Python con uv (`uv add`), siempre con `uv.lock` commiteado. Los scripts de npm se crean con el scaffold del frontend.
 
 ## Reglas de código
 - Backend: todo async; tipado completo; nada de `print`, usar el logger. Config solo vía `core/config.py` (pydantic-settings), nunca `os.environ` suelto.

@@ -9,7 +9,7 @@ Cada fase se divide en tareas pequeñas. Una tarea = una rama = una PR.
 - [x] README, CLAUDE.md y docs (arquitectura, roadmap, decisiones, seguridad)
 
 ## Fase 1: Chat mínimo (actual)
-- [ ] Backend FastAPI: config, logging, request id, handler global de errores, `/api/health`
+- [x] Backend FastAPI: config, logging, request id, handler global de errores, `/api/health`
 - [ ] Dockerfile del backend
 - [ ] Proveedor Ollama: listar modelos y chat con streaming (SSE)
 - [ ] Scaffold frontend (Vite + React + TS + Tailwind + shadcn/ui + Sonner)
