@@ -2,6 +2,7 @@ from collections.abc import AsyncIterator, Callable, Sequence
 
 import httpx
 import pytest
+from argon2 import PasswordHasher
 from fastapi import FastAPI
 
 from app.api.dependencies import get_llm_provider
@@ -38,8 +39,28 @@ class FakeLLMProvider:
             raise self.fail_after
 
 
+TEST_USERNAME = "void"
+TEST_PASSWORD = "correct horse battery staple"
+# Cheap parameters keep the suite fast; verification reads them from the hash itself.
+TEST_PASSWORD_HASH = PasswordHasher(time_cost=1, memory_cost=8, parallelism=1).hash(TEST_PASSWORD)
+TEST_SESSION_SECRET = "s" * 48
+
+
 def make_settings(**overrides: object) -> Settings:
-    return Settings(app_env="test", _env_file=None, **overrides)  # type: ignore[call-arg, arg-type]
+    values: dict[str, object] = {
+        "auth_username": TEST_USERNAME,
+        "auth_password_hash": TEST_PASSWORD_HASH,
+        "session_secret": TEST_SESSION_SECRET,
+    }
+    values.update(overrides)
+    return Settings(app_env="test", _env_file=None, **values)  # type: ignore[call-arg, arg-type]
+
+
+async def log_in(client: httpx.AsyncClient) -> None:
+    response = await client.post(
+        "/api/auth/login", json={"username": TEST_USERNAME, "password": TEST_PASSWORD}
+    )
+    assert response.status_code == 204, response.text
 
 
 @pytest.fixture
@@ -64,8 +85,14 @@ def make_client() -> Callable[[FastAPI], httpx.AsyncClient]:
 
 
 @pytest.fixture
-async def client(
+async def anon_client(
     app: FastAPI, make_client: Callable[[FastAPI], httpx.AsyncClient]
 ) -> AsyncIterator[httpx.AsyncClient]:
     async with make_client(app) as c:
         yield c
+
+
+@pytest.fixture
+async def client(anon_client: httpx.AsyncClient) -> httpx.AsyncClient:
+    await log_in(anon_client)
+    return anon_client

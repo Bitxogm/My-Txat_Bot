@@ -18,9 +18,10 @@ class AppError(Exception):
     code: str = "INTERNAL_ERROR"
     message: str = "Error interno del servidor"
 
-    def __init__(self, message: str | None = None) -> None:
+    def __init__(self, message: str | None = None, headers: dict[str, str] | None = None) -> None:
         if message is not None:
             self.message = message
+        self.headers = headers or {}
         super().__init__(self.message)
 
 
@@ -34,6 +35,30 @@ class BadRequestError(AppError):
     status_code = HTTPStatus.BAD_REQUEST
     code = "BAD_REQUEST"
     message = "Petición no válida"
+
+
+class UnauthorizedError(AppError):
+    status_code = HTTPStatus.UNAUTHORIZED
+    code = "UNAUTHORIZED"
+    message = "Sesión no válida o caducada. Inicia sesión."
+
+
+class InvalidCredentialsError(AppError):
+    status_code = HTTPStatus.UNAUTHORIZED
+    code = "INVALID_CREDENTIALS"
+    message = "Usuario o contraseña incorrectos"
+
+
+class TooManyLoginAttemptsError(AppError):
+    status_code = HTTPStatus.TOO_MANY_REQUESTS
+    code = "TOO_MANY_ATTEMPTS"
+    message = "Demasiados intentos fallidos. Espera unos minutos."
+
+
+class AuthNotConfiguredError(AppError):
+    status_code = HTTPStatus.SERVICE_UNAVAILABLE
+    code = "AUTH_NOT_CONFIGURED"
+    message = "El login no está configurado en el servidor"
 
 
 class ModelUnavailableError(AppError):
@@ -75,7 +100,9 @@ def internal_error_response() -> JSONResponse:
 async def _handle_app_error(_: Request, exc: AppError) -> JSONResponse:
     if exc.status_code >= 500:
         logger.error("%s: %s", exc.code, exc.message)
-    return error_response(exc.status_code, exc.code, exc.message)
+    response = error_response(exc.status_code, exc.code, exc.message)
+    response.headers.update(exc.headers)
+    return response
 
 
 async def _handle_http_exception(_: Request, exc: StarletteHTTPException) -> JSONResponse:
