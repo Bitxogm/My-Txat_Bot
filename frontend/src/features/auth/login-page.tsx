@@ -92,8 +92,7 @@ export function LoginPage({ onLogin, devLogin = DEV_LOGIN }: LoginPageProps) {
               {submitting ? 'Entrando…' : 'Entrar'}
             </Button>
           </form>
-          {/* import.meta.env.DEV first so production builds drop the whole card. */}
-          {import.meta.env.DEV && devLogin && (
+          {devLogin && (
             <button
               type="button"
               onClick={() => {

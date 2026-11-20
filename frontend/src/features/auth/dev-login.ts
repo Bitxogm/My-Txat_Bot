@@ -4,15 +4,7 @@ export interface DevCredentials {
 }
 
 /**
- * Throwaway local credentials for the quick-login card. Only in `npm run dev`: in production
- * builds `import.meta.env.DEV` is false, so this folds to null and the values are not bundled.
+ * Throwaway local credentials for the quick-login card (see devLoginDefine in vite.config.ts).
+ * null in builds, in tests and when the dev server is exposed with --host.
  */
-export const DEV_LOGIN: DevCredentials | null =
-  import.meta.env.DEV &&
-  import.meta.env.VITE_DEV_LOGIN_USER &&
-  import.meta.env.VITE_DEV_LOGIN_PASSWORD
-    ? {
-        username: import.meta.env.VITE_DEV_LOGIN_USER,
-        password: import.meta.env.VITE_DEV_LOGIN_PASSWORD,
-      }
-    : null;
+export const DEV_LOGIN: DevCredentials | null = __DEV_LOGIN__;
