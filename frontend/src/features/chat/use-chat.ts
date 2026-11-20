@@ -5,6 +5,7 @@ import {
   isAbortError,
   sendMessage,
   type Conversation,
+  type PersonalityRef,
   type MessageStatus as StoredStatus,
   type StoredMessage,
 } from '@/lib/api';
@@ -26,12 +27,15 @@ export interface UseChatOptions {
 
 export interface UseChat {
   conversationId: string | null;
+  /** Personality of the open conversation (fixed when it was created); null for a new chat. */
+  personality: PersonalityRef | null;
   messages: UiMessage[];
   isStreaming: boolean;
   isLoading: boolean;
   open: (id: string) => Promise<Conversation | null>;
   startNew: () => void;
-  send: (content: string, model: string) => Promise<void>;
+  /** `personalityId` only matters for the first message, which creates the conversation. */
+  send: (content: string, model: string, personalityId?: string) => Promise<void>;
   stop: () => void;
 }
 
@@ -47,6 +51,7 @@ function fromStored(message: StoredMessage): UiMessage | null {
 
 export function useChat({ onActivity }: UseChatOptions = {}): UseChat {
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [personality, setPersonality] = useState<PersonalityRef | null>(null);
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -84,6 +89,7 @@ export function useChat({ onActivity }: UseChatOptions = {}): UseChat {
     streamRef.current?.abort();
     loadRef.current?.abort();
     select(null);
+    setPersonality(null);
     setMessages([]);
     setIsLoading(false);
   }, [select]);
@@ -96,10 +102,12 @@ export function useChat({ onActivity }: UseChatOptions = {}): UseChat {
       const controller = new AbortController();
       loadRef.current = controller;
       select(id);
+      setPersonality(null);
       setMessages([]);
       setIsLoading(true);
       try {
         const detail = await getConversation(id, controller.signal);
+        setPersonality(detail.personality);
         setMessages(detail.messages.map(fromStored).filter((m) => m !== null));
         return detail;
       } catch (error) {
@@ -118,7 +126,7 @@ export function useChat({ onActivity }: UseChatOptions = {}): UseChat {
   );
 
   const send = useCallback(
-    async (content: string, model: string) => {
+    async (content: string, model: string, personalityId?: string) => {
       const text = content.trim();
       if (!text || streamRef.current) return;
 
@@ -137,7 +145,9 @@ export function useChat({ onActivity }: UseChatOptions = {}): UseChat {
       try {
         let id = conversationRef.current;
         if (!id) {
-          id = (await createConversation({ model })).id;
+          const created = await createConversation({ model, personality_id: personalityId });
+          id = created.id;
+          setPersonality(created.personality);
           select(id);
           onActivityRef.current?.();
         }
@@ -167,5 +177,15 @@ export function useChat({ onActivity }: UseChatOptions = {}): UseChat {
     [select, updateMessage],
   );
 
-  return { conversationId, messages, isStreaming, isLoading, open, startNew, send, stop };
+  return {
+    conversationId,
+    personality,
+    messages,
+    isStreaming,
+    isLoading,
+    open,
+    startNew,
+    send,
+    stop,
+  };
 }

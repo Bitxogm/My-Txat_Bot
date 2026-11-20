@@ -8,6 +8,7 @@ import {
   getMe,
   listConversations,
   listModels,
+  listPersonalities,
   login,
   logout,
   setUnauthorizedHandler,
@@ -28,6 +29,7 @@ vi.mock('@/lib/api', async (importOriginal) => ({
   logout: vi.fn(),
   listModels: vi.fn(),
   listConversations: vi.fn(),
+  listPersonalities: vi.fn(),
   setUnauthorizedHandler: vi.fn(() => () => undefined),
 }));
 vi.mock('sonner', async (importOriginal) => ({
@@ -44,6 +46,7 @@ const unauthorized = () => apiError('unauthorized', 401, 'UNAUTHORIZED', 'Sesió
 beforeEach(() => {
   vi.mocked(listModels).mockResolvedValue({ models: [], default_model: null });
   vi.mocked(listConversations).mockResolvedValue({ conversations: [] });
+  vi.mocked(listPersonalities).mockResolvedValue({ personalities: [] });
 });
 
 afterEach(() => {
