@@ -43,3 +43,8 @@ Registro corto de decisiones de arquitectura. Formato: contexto, decisión, cons
 - **Decisión**: `POST /api/chat` responde `text/event-stream` con eventos `token`, `done` y `error`. El frontend lo lee con `fetch` + `ReadableStream` (no `EventSource`, que solo admite GET).
 - **Motivo**: el historial va en el cuerpo; SSE es más simple que WebSocket y pasa bien por nginx (`X-Accel-Buffering: no`).
 - **Consecuencias**: los errores previos al primer token son JSON normales con su status HTTP; los posteriores llegan como evento `error`.
+
+## ADR-011: El servidor es la fuente de verdad de las conversaciones
+- **Decisión**: el cliente solo envía el mensaje nuevo (`POST /api/conversations/{id}/messages`); el backend guarda el turno y monta el historial desde SQLite. `/api/chat` se mantiene sin estado.
+- **Motivo**: el historial no depende de lo que mande el navegador y la respuesta se guarda aunque el cliente corte (se marca `stopped`).
+- **Consecuencias**: una sola conexión aiosqlite en modo WAL (un usuario). Para hacer backup en caliente no basta con copiar `txatbot.db`: hay que copiar también `-wal` o usar `sqlite3 data/txatbot.db ".backup copia.db"`.
