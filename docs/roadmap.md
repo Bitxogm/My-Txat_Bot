@@ -15,7 +15,7 @@ Cada fase se divide en tareas pequeñas. Una tarea = una rama = una PR.
 - [x] Scaffold frontend (Vite + React + TS + Tailwind + shadcn/ui + Sonner)
 - [x] Cliente API único con mapeo de errores
 - [x] Pantalla de chat con selector de modelo
-- [ ] Dockerfile del frontend (build + nginx)
+- [x] Dockerfile del frontend (build + nginx)
 - [ ] Login de un solo usuario (cookie httpOnly)
 - [ ] Persistencia de conversaciones en SQLite
 

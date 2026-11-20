@@ -50,6 +50,14 @@ jobs:
       - name: Build backend image
         run: docker build -t txatbot-backend:ci backend
 
+  frontend-image:
+    name: Frontend image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build frontend image
+        run: docker build -t txatbot-frontend:ci frontend
+
   frontend:
     name: Frontend (ESLint + Prettier + tsc + Vitest + build)
     runs-on: ubuntu-latest
