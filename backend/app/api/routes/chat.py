@@ -9,6 +9,7 @@ from app.api.streaming import stream_reply
 from app.core.config import Settings
 from app.core.errors import BadRequestError
 from app.domain.chat import ChatMessage, Role
+from app.domain.prompts import compose_system_prompt
 from app.ports.llm import LLMProvider
 
 router = APIRouter(tags=["chat"])
@@ -37,10 +38,14 @@ async def chat(
     llm: Annotated[LLMProvider, Depends(get_llm_provider)],
     settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> StreamingResponse:
-    """Stateless chat: the client sends the whole history. See stream_reply for the events."""
+    """Stateless chat: the client sends the whole history. See stream_reply for the events.
+
+    The base layer is always prepended, so this path has the same limits as conversations.
+    """
     model = body.model or settings.default_model
     if not model:
         raise BadRequestError("Indica un modelo: no hay DEFAULT_MODEL configurado")
 
-    messages = [ChatMessage(role=m.role, content=m.content) for m in body.messages]
+    messages = [ChatMessage(role="system", content=compose_system_prompt(""))]
+    messages += [ChatMessage(role=m.role, content=m.content) for m in body.messages]
     return await stream_reply(llm, model, messages)

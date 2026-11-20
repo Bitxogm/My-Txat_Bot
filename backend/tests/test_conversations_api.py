@@ -78,7 +78,7 @@ async def test_history_skips_failed_turns_and_keeps_the_first_title(
     await send(client, conversation_id, "dos")
 
     _, history = fake_llm.calls[-1]
-    assert [(m.role, m.content) for m in history] == [("user", "uno"), ("user", "dos")]
+    assert [(m.role, m.content) for m in history[1:]] == [("user", "uno"), ("user", "dos")]
     detail = (await client.get(f"/api/conversations/{conversation_id}")).json()
     assert detail["title"] == "uno"
     assert [m["status"] for m in detail["messages"]] == ["done", "error", "done", "done"]

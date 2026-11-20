@@ -6,6 +6,7 @@ from fastapi import FastAPI
 
 from app.api.dependencies import get_llm_provider
 from app.core.errors import ModelNotFoundError, ModelUnavailableError
+from app.domain.prompts import BASE_PROMPT
 from app.main import create_app
 from tests.conftest import FakeLLMProvider, log_in, make_settings
 
@@ -34,8 +35,10 @@ async def test_streams_tokens_then_done(
     ]
     model, messages = fake_llm.calls[0]
     assert model == "m"
-    assert messages[0].role == "user"
-    assert messages[0].content == "hola"
+    # The base layer always goes first, also on the stateless endpoint.
+    assert messages[0].role == "system"
+    assert messages[0].content == BASE_PROMPT
+    assert (messages[1].role, messages[1].content) == ("user", "hola")
 
 
 async def test_uses_default_model(

@@ -1,11 +1,20 @@
 from typing import Protocol
 
 from app.domain.chat import Role
-from app.domain.conversation import Conversation, MessageStatus, StoredMessage
+from app.domain.conversation import (
+    Conversation,
+    MessageStatus,
+    PersonalitySnapshot,
+    StoredMessage,
+)
 
 
 class ConversationRepository(Protocol):
-    async def create(self, title: str, model: str) -> Conversation: ...
+    async def create(
+        self, title: str, model: str, personality: PersonalitySnapshot | None = None
+    ) -> Conversation:
+        """`personality` is stored as an immutable snapshot."""
+        ...
 
     async def list_all(self) -> list[Conversation]:
         """Most recently updated first."""

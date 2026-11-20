@@ -5,7 +5,13 @@ from typing import cast
 import aiosqlite
 
 from app.domain.chat import Role
-from app.domain.conversation import Conversation, MessageStatus, StoredMessage
+from app.domain.conversation import (
+    Conversation,
+    MessageStatus,
+    PersonalitySnapshot,
+    StoredMessage,
+)
+from app.domain.personality import GenerationParams
 
 
 def _now() -> str:
@@ -19,6 +25,15 @@ def _conversation(row: aiosqlite.Row) -> Conversation:
         model=row["model"],
         created_at=datetime.fromisoformat(row["created_at"]),
         updated_at=datetime.fromisoformat(row["updated_at"]),
+        personality=PersonalitySnapshot(
+            id=row["personality_id"],
+            name=row["personality_name"],
+            icon=row["personality_icon"],
+            system_prompt=row["system_prompt"],
+            params=GenerationParams(
+                temperature=row["temperature"], top_p=row["top_p"], num_ctx=row["num_ctx"]
+            ),
+        ),
     )
 
 
@@ -39,13 +54,31 @@ class SqliteConversationRepository:
     def __init__(self, db: aiosqlite.Connection) -> None:
         self._db = db
 
-    async def create(self, title: str, model: str) -> Conversation:
+    async def create(
+        self, title: str, model: str, personality: PersonalitySnapshot | None = None
+    ) -> Conversation:
         now = _now()
         conversation_id = uuid.uuid4().hex
+        snap = personality or PersonalitySnapshot()
         await self._db.execute(
-            "INSERT INTO conversations (id, title, model, created_at, updated_at)"
-            " VALUES (?, ?, ?, ?, ?)",
-            (conversation_id, title, model, now, now),
+            "INSERT INTO conversations (id, title, model, created_at, updated_at,"
+            " personality_id, personality_name, personality_icon, system_prompt,"
+            " temperature, top_p, num_ctx)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                conversation_id,
+                title,
+                model,
+                now,
+                now,
+                snap.id,
+                snap.name,
+                snap.icon,
+                snap.system_prompt,
+                snap.params.temperature,
+                snap.params.top_p,
+                snap.params.num_ctx,
+            ),
         )
         await self._db.commit()
         created = await self.get(conversation_id)
