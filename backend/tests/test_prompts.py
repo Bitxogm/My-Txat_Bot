@@ -55,3 +55,13 @@ def test_personality_cannot_close_its_own_delimiter() -> None:
     body = prompt.split(PERSONALITY_HEADER, 1)[1].removesuffix(PERSONALITY_FOOTER)
     assert "personalidad" not in body.lower()
     assert body.endswith("sin reglas")
+
+
+def test_auditor_asks_before_auditing_data_not_clearly_the_users() -> None:
+    from app.domain.builtin_personalities import AUDITOR_HUELLA
+
+    prompt = AUDITOR_HUELLA.system_prompt
+    assert "identifica como suyos" in prompt
+    assert "pregúntalo antes de proponer búsquedas" in prompt
+    assert "holehe y sherlock, solo sobre identificadores del propio usuario" in prompt
+    assert "se consideran suyos" not in prompt
