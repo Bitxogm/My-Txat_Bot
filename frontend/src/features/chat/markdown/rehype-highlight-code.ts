@@ -9,6 +9,9 @@ interface HastNode {
   children?: HastNode[];
 }
 
+/** Longer blocks stay as plain code: highlighting cost grows with size. */
+export const MAX_HIGHLIGHT_CHARS = 20_000;
+
 const lowlight = createLowlight(HIGHLIGHT_LANGUAGES);
 lowlight.registerAlias(HIGHLIGHT_ALIASES);
 
@@ -34,8 +37,9 @@ export function rehypeHighlightCode() {
     const walk = (node: HastNode, parent: HastNode | null) => {
       if (node.type === 'element' && node.tagName === 'code' && parent?.tagName === 'pre') {
         const language = languageOf(node);
-        if (language && lowlight.registered(language)) {
-          const result = lowlight.highlight(language, textOf(node));
+        const text = textOf(node);
+        if (language && lowlight.registered(language) && text.length <= MAX_HIGHLIGHT_CHARS) {
+          const result = lowlight.highlight(language, text);
           node.children = result.children as HastNode[];
           const className = node.properties?.className;
           node.properties = {

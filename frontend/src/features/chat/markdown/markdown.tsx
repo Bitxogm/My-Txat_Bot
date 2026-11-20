@@ -1,8 +1,9 @@
-import type { ReactNode } from 'react';
+import { memo, useDeferredValue, type ReactNode } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import 'highlight.js/styles/github-dark.min.css';
 import { CodeBlock } from './code-block';
+import { rehypeRevealHiddenChars } from './hidden-chars';
 import { rehypeHighlightCode } from './rehype-highlight-code';
 import { remarkHtmlAsText } from './remark-html-as-text';
 import { safeUrl } from './safe-url';
@@ -33,6 +34,8 @@ function ExternalLink({ href, children }: { href: string; children: ReactNode })
   return (
     <a
       href={href}
+      // The visible text can differ from the target ("[kali.org](https://evil...)"): show it.
+      title={href}
       target="_blank"
       rel="noopener noreferrer"
       className="text-primary underline underline-offset-2"
@@ -66,22 +69,32 @@ const components: Components = {
   },
 };
 
+/** Above this size the reply is shown as plain text: parsing cost grows fast with size. */
+export const MAX_MARKDOWN_CHARS = 100_000;
+
 /**
  * Renders model output as Markdown (GFM). Raw HTML is never interpreted: remarkHtmlAsText turns
- * it into text and there is no rehype-raw. Partial Markdown while streaming is fine: an unclosed code
- * fence simply runs to the end of the text.
+ * it into text and there is no rehype-raw. Partial Markdown while streaming is fine: an unclosed
+ * code fence simply runs to the end of the text.
+ *
+ * memo: finished replies don't re-parse on every streamed token of another message.
+ * useDeferredValue: the streaming reply re-parses at React's pace, not once per token.
  */
-export function Markdown({ content }: { content: string }) {
+export const Markdown = memo(function Markdown({ content }: { content: string }) {
+  const deferred = useDeferredValue(content);
+  if (deferred.length > MAX_MARKDOWN_CHARS) {
+    return <div className="whitespace-pre-wrap">{deferred}</div>;
+  }
   return (
     <div className="markdown">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkHtmlAsText]}
-        rehypePlugins={[rehypeHighlightCode]}
+        rehypePlugins={[rehypeRevealHiddenChars, rehypeHighlightCode]}
         urlTransform={(url) => safeUrl(url) ?? ''}
         components={components}
       >
-        {content}
+        {deferred}
       </ReactMarkdown>
     </div>
   );
-}
+});
