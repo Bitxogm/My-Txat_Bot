@@ -53,6 +53,25 @@ MIGRATIONS: list[str] = [
     ALTER TABLE conversations ADD COLUMN top_p REAL;
     ALTER TABLE conversations ADD COLUMN num_ctx INTEGER;
     """,
+    # v3: OSINT source catalog (ADR-014). The category is validated in code (domain/osint.py)
+    # so adding one doesn't need a migration.
+    """
+    CREATE TABLE osint_sources (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        url TEXT NOT NULL,
+        category TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        requires_api_key INTEGER NOT NULL DEFAULT 0 CHECK (requires_api_key IN (0, 1)),
+        requires_payment INTEGER NOT NULL DEFAULT 0 CHECK (requires_payment IN (0, 1)),
+        builtin INTEGER NOT NULL DEFAULT 0 CHECK (builtin IN (0, 1)),
+        is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+        position INTEGER NOT NULL DEFAULT 1000,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+    CREATE INDEX idx_osint_sources_category ON osint_sources (category);
+    """,
 ]
 
 

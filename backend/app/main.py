@@ -17,14 +17,24 @@ from app.adapters.openai_compat.provider import (
 from app.adapters.routing import RoutingLLMProvider
 from app.adapters.sqlite.conversations import SqliteConversationRepository
 from app.adapters.sqlite.database import connect, sqlite_path
+from app.adapters.sqlite.osint_sources import SqliteOsintSourceRepository
 from app.adapters.sqlite.personalities import SqlitePersonalityRepository
 from app.api.dependencies import require_session
-from app.api.routes import auth, chat, conversations, health, models, personalities
+from app.api.routes import (
+    auth,
+    chat,
+    conversations,
+    health,
+    models,
+    osint_sources,
+    personalities,
+)
 from app.core.auth import AuthService
 from app.core.config import Settings, get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
+from app.domain.builtin_osint_sources import BUILTIN_OSINT_SOURCES
 from app.domain.builtin_personalities import BUILTIN_PERSONALITIES
 
 logger = logging.getLogger(__name__)
@@ -66,6 +76,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         personality_repo = SqlitePersonalityRepository(db)
         await personality_repo.seed_builtins(BUILTIN_PERSONALITIES)
         app.state.personalities = personality_repo
+        osint_repo = SqliteOsintSourceRepository(db)
+        await osint_repo.seed_builtins(BUILTIN_OSINT_SOURCES)
+        app.state.osint_sources = osint_repo
         logger.info("Backend started (env=%s)", settings.app_env)
         try:
             yield
@@ -111,6 +124,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(chat.router, prefix="/api", dependencies=protected)
     app.include_router(conversations.router, prefix="/api", dependencies=protected)
     app.include_router(personalities.router, prefix="/api", dependencies=protected)
+    app.include_router(osint_sources.router, prefix="/api", dependencies=protected)
     return app
 
 

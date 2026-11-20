@@ -9,6 +9,7 @@ from app.api.dependencies import (
     get_app_settings,
     get_conversation_repository,
     get_llm_provider,
+    get_osint_source_repository,
     get_personality_repository,
 )
 from app.api.routes.chat import MAX_CONTENT_CHARS
@@ -29,10 +30,12 @@ from app.domain.conversation import (
     StoredMessage,
     title_from_message,
 )
+from app.domain.osint import format_osint_catalog, needs_osint_catalog
 from app.domain.personality import DEFAULT_PERSONALITY_ID
 from app.domain.prompts import compose_system_prompt
 from app.ports.conversations import ConversationRepository
 from app.ports.llm import LLMProvider
+from app.ports.osint_sources import OsintSourceRepository
 from app.ports.personalities import PersonalityRepository
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
@@ -198,6 +201,7 @@ async def send_message(
     body: SendMessage,
     repo: Repo,
     llm: Annotated[LLMProvider, Depends(get_llm_provider)],
+    osint_sources: Annotated[OsintSourceRepository, Depends(get_osint_source_repository)],
     settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> StreamingResponse:
     """Save the user message, stream the reply (same SSE events as /api/chat) and save it.
@@ -221,7 +225,13 @@ async def send_message(
     # The system prompt is composed on every turn (never stored as a message): the base layer
     # comes from code, so a fix to it also reaches older conversations; the personality layer
     # is the conversation's own snapshot.
-    history = [ChatMessage(role="system", content=compose_system_prompt(snapshot.system_prompt))]
+    # The OSINT catalog is knowledge, not part of the snapshot: the Auditor always gets the
+    # sources that are active right now (ADR-014).
+    reference = ""
+    if needs_osint_catalog(snapshot.id):
+        reference = format_osint_catalog(await osint_sources.list_all(active_only=True))
+    system_prompt = compose_system_prompt(snapshot.system_prompt, reference)
+    history = [ChatMessage(role="system", content=system_prompt)]
     history += [
         ChatMessage(role=m.role, content=m.content)
         for m in previous
