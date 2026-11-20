@@ -13,7 +13,7 @@ Cada fase se divide en tareas pequeñas. Una tarea = una rama = una PR.
 - [x] Dockerfile del backend
 - [x] Proveedor Ollama: listar modelos y chat con streaming (SSE)
 - [x] Scaffold frontend (Vite + React + TS + Tailwind + shadcn/ui + Sonner)
-- [ ] Cliente API único con mapeo de errores
+- [x] Cliente API único con mapeo de errores
 - [ ] Pantalla de chat con selector de modelo
 - [ ] Dockerfile del frontend (build + nginx)
 - [ ] Login de un solo usuario (cookie httpOnly)
