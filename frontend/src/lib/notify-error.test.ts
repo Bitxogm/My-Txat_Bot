@@ -30,6 +30,12 @@ describe('notifyError', () => {
     expect(toastError).toHaveBeenCalledWith('Mensaje', { description: undefined });
   });
 
+  it('ignores 401s, which the unauthorized handler takes care of', () => {
+    notifyError(apiError('unauthorized'));
+
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
   it('ignores aborted requests', () => {
     notifyError(new DOMException('aborted', 'AbortError'));
 

@@ -13,3 +13,4 @@ paths:
 - Antes de dar algo por terminado: `npm run lint && npm run format:check && npx tsc -b && npm run test -- --run`.
 - TypeScript fijado en `~6.0`: typescript-eslint aún no soporta TS 7 (peer `<6.1`). No subirlo hasta que lo soporte.
 - Type-check con `npx tsc -b` (el `tsconfig.json` raíz solo tiene referencias; `tsc --noEmit` sobre él no comprueba nada).
+- Si se añade vite-plugin-pwa: excluir `/api/*` de cualquier caché de Workbox (`navigateFallbackDenylist: [/^\/api\//]`, nada de `runtimeCaching` sobre `/api`), o `/auth/me` y el chat podrían servirse desde caché tras el logout.

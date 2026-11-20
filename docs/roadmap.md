@@ -16,7 +16,7 @@ Cada fase se divide en tareas pequeñas. Una tarea = una rama = una PR.
 - [x] Cliente API único con mapeo de errores
 - [x] Pantalla de chat con selector de modelo
 - [x] Dockerfile del frontend (build + nginx)
-- [ ] Login de un solo usuario (cookie httpOnly)
+- [x] Login de un solo usuario (cookie httpOnly)
 - [ ] Persistencia de conversaciones en SQLite
 
 ## Fase 2: Personalidad y ficheros

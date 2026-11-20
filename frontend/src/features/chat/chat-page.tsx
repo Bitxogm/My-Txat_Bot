@@ -1,4 +1,4 @@
-import { PlusIcon } from 'lucide-react';
+import { LogOutIcon, PlusIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Composer } from './composer';
 import { MessageList } from './message-list';
@@ -6,7 +6,12 @@ import { ModelSelect } from './model-select';
 import { useChat } from './use-chat';
 import { useModels } from './use-models';
 
-export function ChatPage() {
+interface ChatPageProps {
+  username: string;
+  onLogout: () => void;
+}
+
+export function ChatPage({ username, onLogout }: ChatPageProps) {
   const { models, selected, select, status, reload } = useModels();
   const { messages, isStreaming, send, stop, reset } = useChat();
 
@@ -32,6 +37,19 @@ export function ChatPage() {
           >
             <PlusIcon />
             <span className="hidden sm:inline">Nueva</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => {
+              // Stop any reply in progress before the session is closed.
+              stop();
+              onLogout();
+            }}
+            aria-label={`Cerrar sesión (${username})`}
+            title={`Cerrar sesión (${username})`}
+          >
+            <LogOutIcon />
           </Button>
         </div>
       </header>

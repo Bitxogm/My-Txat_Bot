@@ -35,7 +35,7 @@ function abortError() {
 
 async function renderReady() {
   const user = userEvent.setup();
-  render(<ChatPage />);
+  render(<ChatPage username="void" onLogout={vi.fn()} />);
   const select = await screen.findByRole('combobox', { name: 'Modelo' });
   await waitFor(() => expect(select).toBeEnabled());
   return { user, select };
@@ -144,7 +144,7 @@ describe('ChatPage', () => {
     );
     listModelsMock.mockResolvedValueOnce(MODELS);
     const user = userEvent.setup();
-    render(<ChatPage />);
+    render(<ChatPage username="void" onLogout={vi.fn()} />);
 
     await waitFor(() => expect(notifyError).toHaveBeenCalled());
     expect(screen.getByRole('textbox', { name: 'Mensaje' })).toBeDisabled();
