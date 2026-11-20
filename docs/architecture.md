@@ -54,6 +54,18 @@ Requieren sesión. `system prompt = capa base (domain/prompts.py) + personalidad
 - `POST /api/personalities` y `POST /api/personalities/{id}/duplicate` → 201 (siempre `builtin: false`).
 - Campos: `name` (1-60), `icon` (nombre de icono lucide), `description` (≤200), `system_prompt` (1-8000), `temperature` (0-2), `top_p` (0-1], `num_ctx` (512-16384: más contexto desborda la GPU de 12 GB con un 14B), `default_model`; los parámetros son opcionales (null = valor del modelo).
 
+## Catálogo OSINT (ADR-014)
+
+Requiere sesión.
+
+- `GET /api/osint-sources?category=` → `{ sources: [...] }`: incorporadas (`builtin: true`, ids `osint-*`) primero.
+- `POST /api/osint-sources` → 201 (siempre `builtin: false`).
+- `PUT /api/osint-sources/{id}`: sustitución completa en las propias; en una incorporada solo puede cambiar `is_active` (cualquier otro campo distinto → 403 `OSINT_SOURCE_BUILTIN`).
+- `POST /api/osint-sources/{id}/toggle`: activa o desactiva (también incorporadas).
+- `DELETE /api/osint-sources/{id}`: solo las propias (incorporada → 403).
+- Campos: `name` (1-60, una línea), `url` (`http(s)`, ≤300, sin credenciales), `category`, `description` (≤200, una línea), `requires_api_key`, `requires_payment`, `is_active`.
+- Las fuentes activas se inyectan en el prompt del Auditor de Huella Digital en cada turno.
+
 ## Conversaciones
 
 Requieren sesión. Persisten en SQLite (`data/txatbot.db`) vía `ConversationRepository` (`adapters/sqlite`, aiosqlite). Esquema versionado con `PRAGMA user_version` en `adapters/sqlite/database.py`: las migraciones solo se añaden al final de `MIGRATIONS`.
