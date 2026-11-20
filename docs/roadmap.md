@@ -21,6 +21,7 @@ Cada fase se divide en tareas pequeñas. Una tarea = una rama = una PR.
 
 ## Fase 2: Personalidad y ficheros (actual)
 - [x] Personalidades editables (system prompt + parámetros)
+- [x] Catálogo de fuentes OSINT para el Auditor de Huella Digital (ADR-014)
 - [ ] Subida de imágenes (modelos con visión) y ficheros de texto/PDF
 - [ ] PWA (instalable, offline shell)
 
