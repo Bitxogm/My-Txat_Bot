@@ -48,10 +48,8 @@ def test_dev_login_writes_matching_credentials(tmp_path: Path) -> None:
 
     backend = cli._read_env(root / "backend" / ".env")
     frontend = cli._read_env(root / "frontend" / ".env.local")
-    assert backend["AUTH_USERNAME"] == frontend["VITE_DEV_LOGIN_USER"] == "void"
-    assert PasswordHasher().verify(
-        backend["AUTH_PASSWORD_HASH"], frontend["VITE_DEV_LOGIN_PASSWORD"]
-    )
+    assert backend["AUTH_USERNAME"] == frontend["DEV_LOGIN_USER"] == "void"
+    assert PasswordHasher().verify(backend["AUTH_PASSWORD_HASH"], frontend["DEV_LOGIN_PASSWORD"])
     assert len(backend["SESSION_SECRET"]) >= 32
     assert backend["OTHER"] == "keep"
     raw = (root / "backend" / ".env").read_text()
@@ -78,5 +76,60 @@ def test_dev_login_never_prints_the_password(
 
     cli.dev_login(root)
 
-    password = cli._read_env(root / "frontend" / ".env.local")["VITE_DEV_LOGIN_PASSWORD"]
+    password = cli._read_env(root / "frontend" / ".env.local")["DEV_LOGIN_PASSWORD"]
     assert password not in capsys.readouterr().out
+
+
+def test_dev_login_refuses_in_production(tmp_path: Path) -> None:
+    root = _fake_repo(tmp_path, "APP_ENV=production\n")
+
+    assert cli.dev_login(root) == 1
+    assert not (root / "frontend" / ".env.local").exists()
+
+
+def test_dev_login_does_not_replace_a_real_password(tmp_path: Path) -> None:
+    original = "AUTH_USERNAME=void\nAUTH_PASSWORD_HASH='$argon2id$real'\n"
+    root = _fake_repo(tmp_path, original)
+
+    assert cli.dev_login(root) == 1
+    assert (root / "backend" / ".env").read_text() == original
+
+    assert cli.dev_login(root, force=True) == 0
+    assert cli._read_env(root / "backend" / ".env")["DEV_LOGIN"] == "1"
+
+
+def test_dev_login_can_rotate_its_own_password(tmp_path: Path) -> None:
+    root = _fake_repo(tmp_path)
+    cli.dev_login(root)
+    first = cli._read_env(root / "frontend" / ".env.local")["DEV_LOGIN_PASSWORD"]
+
+    assert cli.dev_login(root) == 0
+
+    assert cli._read_env(root / "frontend" / ".env.local")["DEV_LOGIN_PASSWORD"] != first
+
+
+def test_dev_login_rejects_unsafe_usernames(tmp_path: Path) -> None:
+    root = _fake_repo(tmp_path, "AUTH_USERNAME=bad $name\n")
+
+    assert cli.dev_login(root) == 1
+
+
+def test_dev_login_replaces_symlinks_instead_of_following_them(tmp_path: Path) -> None:
+    root = _fake_repo(tmp_path)
+    target = tmp_path / "elsewhere.txt"
+    target.write_text("untouched")
+    (root / "frontend" / ".env.local").symlink_to(target)
+
+    cli.dev_login(root)
+
+    assert target.read_text() == "untouched"
+    assert not (root / "frontend" / ".env.local").is_symlink()
+
+
+def test_dev_login_matches_export_and_spaced_keys(tmp_path: Path) -> None:
+    root = _fake_repo(tmp_path, "export AUTH_USERNAME = void\n")
+
+    cli.dev_login(root)
+
+    text = (root / "backend" / ".env").read_text()
+    assert text.count("AUTH_USERNAME") == 1
