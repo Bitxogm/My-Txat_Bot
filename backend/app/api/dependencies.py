@@ -4,6 +4,7 @@ from fastapi import Cookie, Depends, Request
 
 from app.core.auth import SESSION_COOKIE, AuthService, Session
 from app.core.config import Settings
+from app.ports.conversations import ConversationRepository
 from app.ports.llm import LLMProvider
 
 
@@ -15,6 +16,11 @@ def get_llm_provider(request: Request) -> LLMProvider:
 def get_app_settings(request: Request) -> Settings:
     settings: Settings = request.app.state.settings
     return settings
+
+
+def get_conversation_repository(request: Request) -> ConversationRepository:
+    repository: ConversationRepository = request.app.state.conversations
+    return repository
 
 
 def get_auth_service(request: Request) -> AuthService:

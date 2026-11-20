@@ -45,9 +45,20 @@ backend/app/
 - `GET /api/auth/me` → `{ username }` o 401 `UNAUTHORIZED`.
 - Detalles de seguridad en [security.md](security.md).
 
+## Conversaciones
+
+Requieren sesión. Persisten en SQLite (`data/txatbot.db`) vía `ConversationRepository` (`adapters/sqlite`, aiosqlite). Esquema versionado con `PRAGMA user_version` en `adapters/sqlite/database.py`: las migraciones solo se añaden al final de `MIGRATIONS`.
+
+- `GET /api/conversations` → `{ conversations: [{ id, title, model, created_at, updated_at }] }`, por actividad reciente.
+- `POST /api/conversations` `{ model? }` → 201 con la conversación (título provisional "Nueva conversación").
+- `GET /api/conversations/{id}` → conversación + `messages: [{ id, role, content, status, created_at }]`.
+- `PATCH /api/conversations/{id}` `{ title }` · `DELETE /api/conversations/{id}` → 204.
+- `POST /api/conversations/{id}/messages` `{ content, model? }` → mismo SSE que `/api/chat`. El servidor guarda el mensaje del usuario, construye el historial desde la base de datos y guarda la respuesta como `done`, `stopped` (el cliente cortó) o `error` (con el texto parcial). El primer mensaje da el título.
+- Los turnos con error y las respuestas vacías no se reenvían al modelo.
+
 ## API de chat
 
-Requiere sesión (401 sin cookie válida).
+Requiere sesión (401 sin cookie válida). `/api/chat` es la variante sin estado (el cliente manda todo el historial y no se guarda nada).
 
 - `GET /api/models`: modelos disponibles en Ollama (`name`, `size_bytes`, `family`, `parameter_size`, `quantization`) y `default_model`.
 - `POST /api/chat` con `{ "model"?: string, "messages": [{ "role": "system"|"user"|"assistant", "content": string }] }`. Si no se indica `model` se usa `DEFAULT_MODEL`.

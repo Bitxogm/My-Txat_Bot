@@ -5,6 +5,8 @@ import pytest
 from argon2 import PasswordHasher
 from fastapi import FastAPI
 
+from app.adapters.sqlite.conversations import SqliteConversationRepository
+from app.adapters.sqlite.database import connect
 from app.api.dependencies import get_llm_provider
 from app.core.config import Settings
 from app.core.errors import AppError
@@ -69,9 +71,18 @@ def fake_llm() -> FakeLLMProvider:
 
 
 @pytest.fixture
-def app(fake_llm: FakeLLMProvider) -> FastAPI:
+async def repo() -> AsyncIterator[SqliteConversationRepository]:
+    db = await connect(":memory:")
+    yield SqliteConversationRepository(db)
+    await db.close()
+
+
+@pytest.fixture
+def app(fake_llm: FakeLLMProvider, repo: SqliteConversationRepository) -> FastAPI:
+    # ASGITransport doesn't run the lifespan, so wire what it would have created.
     application = create_app(make_settings())
     application.dependency_overrides[get_llm_provider] = lambda: fake_llm
+    application.state.conversations = repo
     return application
 
 

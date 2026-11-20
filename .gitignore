@@ -9,6 +9,8 @@ secrets/
 # Datos locales (SQLite, uploads, vectores, backups)
 data/*
 !data/.gitkeep
+# Local dev run from backend/ with the default DATABASE_URL
+backend/data/
 *.db
 *.sqlite
 *.sqlite3

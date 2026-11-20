@@ -31,6 +31,12 @@ class NotFoundError(AppError):
     message = "Recurso no encontrado"
 
 
+class ConversationNotFoundError(AppError):
+    status_code = HTTPStatus.NOT_FOUND
+    code = "CONVERSATION_NOT_FOUND"
+    message = "La conversación no existe"
+
+
 class BadRequestError(AppError):
     status_code = HTTPStatus.BAD_REQUEST
     code = "BAD_REQUEST"
