@@ -3,7 +3,7 @@
 Chatbot personal 100 % local sobre Ollama, con personalidad configurable y orientado a ayudar en labs/CTF autorizados. App de navegador (PWA), totalmente dockerizada.
 
 ## Fase actual
-**Fase 1 (chat mínimo)**: backend FastAPI + Ollama con streaming, frontend de chat, login de un usuario y persistencia en SQLite. Fase 0 cerrada. Detalle en `docs/roadmap.md`. Actualiza esta línea al cambiar de fase.
+**Fase 2 (personalidad y ficheros)**: personalidades editables, subida de imágenes/ficheros y PWA. Fases 0 y 1 cerradas (chat con streaming, login, conversaciones en SQLite, todo en Docker). Detalle en `docs/roadmap.md`. Actualiza esta línea al cambiar de fase.
 
 ## Stack
 - **Backend**: Python 3.12, FastAPI (async), pydantic-settings, Ruff, pytest. SQLite; ChromaDB solo con RAG.
@@ -26,16 +26,19 @@ docker compose config                   # validar el compose
 
 # backend (desde backend/)
 uv sync --extra dev                     # entorno en backend/.venv desde uv.lock
-uv run uvicorn app.main:app --reload    # desarrollo local
+uv run uvicorn app.main:app --reload    # desarrollo local (reiniciar cierra las sesiones)
 uv run ruff check . && uv run ruff format --check .
 uv run pytest
+uv run python -m app.cli hash-password  # AUTH_PASSWORD_HASH para backend/.env
+uv run python -m app.cli session-secret # SESSION_SECRET
 
 # frontend (desde frontend/)
-npm run lint && npm run format:check
-npm run test
+npm run dev                             # :5173, proxy /api -> VITE_DEV_BACKEND_URL (def. :8000)
+npm run lint && npm run format:check && npx tsc -b
+npm run test -- --run
 npm run build
 ```
-Dependencias Python con uv (`uv add`), siempre con `uv.lock` commiteado. Los scripts de npm se crean con el scaffold del frontend.
+Dependencias Python con uv (`uv add`), siempre con `uv.lock` commiteado.
 
 ## Reglas de código
 - Backend: todo async; tipado completo; nada de `print`, usar el logger. Config solo vía `core/config.py` (pydantic-settings), nunca `os.environ` suelto.
