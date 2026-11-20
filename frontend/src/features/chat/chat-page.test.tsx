@@ -3,8 +3,13 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
+  createConversation,
+  deleteConversation,
+  getConversation,
+  listConversations,
   listModels,
-  streamChat,
+  sendMessage,
+  type Conversation,
   type ModelsResponse,
   type StreamChatOptions,
 } from '@/lib/api';
@@ -14,12 +19,13 @@ import { ChatPage } from './chat-page';
 vi.mock('@/lib/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api')>()),
   listModels: vi.fn(),
-  streamChat: vi.fn(),
+  listConversations: vi.fn(),
+  createConversation: vi.fn(),
+  getConversation: vi.fn(),
+  deleteConversation: vi.fn(),
+  sendMessage: vi.fn(),
 }));
 vi.mock('@/lib/notify-error', () => ({ notifyError: vi.fn() }));
-
-const listModelsMock = vi.mocked(listModels);
-const streamChatMock = vi.mocked(streamChat);
 
 const MODELS: ModelsResponse = {
   models: [
@@ -28,6 +34,13 @@ const MODELS: ModelsResponse = {
   ],
   default_model: 'b:8b',
 };
+
+function conversation(id: string, title: string, model = 'a:7b'): Conversation {
+  const at = '2026-11-20T10:00:00+00:00';
+  return { id, title, model, created_at: at, updated_at: at };
+}
+
+const OLD = conversation('c'.repeat(32), 'Notas de un CTF');
 
 function abortError() {
   return new DOMException('aborted', 'AbortError');
@@ -41,8 +54,14 @@ async function renderReady() {
   return { user, select };
 }
 
+function messageBox() {
+  return screen.getByRole('textbox', { name: 'Mensaje' });
+}
+
 beforeEach(() => {
-  listModelsMock.mockResolvedValue(MODELS);
+  vi.mocked(listModels).mockResolvedValue(MODELS);
+  vi.mocked(listConversations).mockResolvedValue({ conversations: [OLD] });
+  vi.mocked(createConversation).mockResolvedValue(conversation('n'.repeat(32), 'Nueva', 'b:8b'));
 });
 
 afterEach(() => {
@@ -50,46 +69,80 @@ afterEach(() => {
 });
 
 describe('ChatPage', () => {
-  it('selects the default model', async () => {
+  it('selects the default model and lists saved conversations', async () => {
     const { select } = await renderReady();
 
     expect(select).toHaveValue('b:8b');
-    expect(within(select).getByRole('option', { name: 'a:7b (7B · Q4_K_M)' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Notas de un CTF' })).toBeInTheDocument();
   });
 
-  it('streams the reply and sends the history with the chosen model', async () => {
-    streamChatMock.mockImplementation(async (_body, { onToken }: StreamChatOptions) => {
-      onToken('Ho');
-      onToken('la');
-      return { model: 'a:7b', content: 'Hola' };
-    });
-    const { user, select } = await renderReady();
+  it('creates a conversation on the first message and streams the reply', async () => {
+    vi.mocked(sendMessage).mockImplementation(
+      async (_id, _body, { onToken }: StreamChatOptions) => {
+        onToken('Ho');
+        onToken('la');
+        return { model: 'b:8b', content: 'Hola' };
+      },
+    );
+    const { user } = await renderReady();
 
-    await user.selectOptions(select, 'a:7b');
-    await user.type(screen.getByRole('textbox', { name: 'Mensaje' }), 'hola{Enter}');
+    await user.type(messageBox(), 'hola{Enter}');
 
     expect(await screen.findByText('Hola')).toBeInTheDocument();
-    expect(screen.getByText('hola')).toBeInTheDocument();
-    expect(streamChatMock).toHaveBeenCalledWith(
-      { model: 'a:7b', messages: [{ role: 'user', content: 'hola' }] },
+    expect(createConversation).toHaveBeenCalledWith({ model: 'b:8b' });
+    expect(sendMessage).toHaveBeenCalledWith(
+      'n'.repeat(32),
+      { content: 'hola', model: 'b:8b' },
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
-    expect(screen.getByRole('textbox', { name: 'Mensaje' })).toHaveValue('');
+    await waitFor(() => expect(vi.mocked(listConversations).mock.calls.length).toBeGreaterThan(1));
+  });
+
+  it('opens a saved conversation with its messages and model, and keeps sending to it', async () => {
+    vi.mocked(getConversation).mockResolvedValue({
+      ...OLD,
+      messages: [
+        { id: 1, role: 'user', content: 'pregunta', status: 'done', created_at: OLD.created_at },
+        {
+          id: 2,
+          role: 'assistant',
+          content: 'a medias',
+          status: 'stopped',
+          created_at: OLD.created_at,
+        },
+      ],
+    });
+    vi.mocked(sendMessage).mockResolvedValue({ model: 'a:7b', content: '' });
+    const { user, select } = await renderReady();
+
+    await user.click(await screen.findByRole('button', { name: 'Notas de un CTF' }));
+
+    expect(await screen.findByText('pregunta')).toBeInTheDocument();
+    expect(screen.getByText('Respuesta detenida.')).toBeInTheDocument();
+    expect(select).toHaveValue('a:7b');
+    expect(screen.getByRole('button', { name: 'Notas de un CTF' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+
+    await user.type(messageBox(), 'sigue{Enter}');
+    await waitFor(() => expect(sendMessage).toHaveBeenCalled());
+    expect(createConversation).not.toHaveBeenCalled();
+    expect(vi.mocked(sendMessage).mock.calls[0][0]).toBe(OLD.id);
   });
 
   it('keeps Shift+Enter as a new line', async () => {
     const { user } = await renderReady();
-    const box = screen.getByRole('textbox', { name: 'Mensaje' });
 
-    await user.type(box, 'a{Shift>}{Enter}{/Shift}b');
+    await user.type(messageBox(), 'a{Shift>}{Enter}{/Shift}b');
 
-    expect(box).toHaveValue('a\nb');
-    expect(streamChatMock).not.toHaveBeenCalled();
+    expect(messageBox()).toHaveValue('a\nb');
+    expect(sendMessage).not.toHaveBeenCalled();
   });
 
   it('stops a reply in progress', async () => {
-    streamChatMock.mockImplementation(
-      (_body, { signal, onToken }: StreamChatOptions) =>
+    vi.mocked(sendMessage).mockImplementation(
+      (_id, _body, { signal, onToken }: StreamChatOptions) =>
         new Promise((_resolve, reject) => {
           onToken('parcial');
           signal?.addEventListener('abort', () => reject(abortError()));
@@ -97,16 +150,15 @@ describe('ChatPage', () => {
     );
     const { user } = await renderReady();
 
-    await user.type(screen.getByRole('textbox', { name: 'Mensaje' }), 'cuenta{Enter}');
+    await user.type(messageBox(), 'cuenta{Enter}');
     await user.click(await screen.findByRole('button', { name: 'Detener' }));
 
     expect(await screen.findByText('Respuesta detenida.')).toBeInTheDocument();
     expect(screen.getByText('parcial')).toBeInTheDocument();
     expect(notifyError).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Enviar' })).toBeInTheDocument();
   });
 
-  it('shows the error and leaves failed turns out of the next request', async () => {
+  it('shows stream errors on the turn', async () => {
     const failure = new ApiError({
       kind: 'server',
       status: 503,
@@ -114,57 +166,77 @@ describe('ChatPage', () => {
       message: 'Caído',
       requestId: 'r1',
     });
-    streamChatMock.mockRejectedValueOnce(failure);
-    streamChatMock.mockResolvedValueOnce({ model: 'b:8b', content: '' });
+    vi.mocked(sendMessage).mockRejectedValueOnce(failure);
     const { user } = await renderReady();
-    const box = screen.getByRole('textbox', { name: 'Mensaje' });
 
-    await user.type(box, 'uno{Enter}');
+    await user.type(messageBox(), 'uno{Enter}');
+
     expect(await screen.findByText('No se pudo completar la respuesta.')).toBeInTheDocument();
     expect(notifyError).toHaveBeenCalledWith(failure);
+  });
 
-    await user.type(box, 'dos{Enter}');
-    await waitFor(() => expect(streamChatMock).toHaveBeenCalledTimes(2));
-    expect(streamChatMock.mock.calls[1][0].messages).toEqual([
-      { role: 'user', content: 'uno' },
-      { role: 'user', content: 'dos' },
-    ]);
+  it('starts a new conversation', async () => {
+    vi.mocked(sendMessage).mockResolvedValue({ model: 'b:8b', content: '' });
+    const { user } = await renderReady();
+    await user.type(messageBox(), 'hola{Enter}');
+    expect(await screen.findByText('hola')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Nueva conversación' }));
+
+    expect(screen.getByText('Escribe un mensaje para empezar.')).toBeInTheDocument();
+  });
+
+  it('deletes a conversation after confirming', async () => {
+    vi.mocked(deleteConversation).mockResolvedValue(undefined);
+    const { user } = await renderReady();
+
+    await user.click(await screen.findByRole('button', { name: 'Borrar «Notas de un CTF»' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(within(dialog).getByText(/No se puede deshacer/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Borrar' }));
+
+    await waitFor(() => expect(deleteConversation).toHaveBeenCalledWith(OLD.id));
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Notas de un CTF' })).not.toBeInTheDocument(),
+    );
+  });
+
+  it('keeps the conversation if the delete is cancelled', async () => {
+    const { user } = await renderReady();
+
+    await user.click(await screen.findByRole('button', { name: 'Borrar «Notas de un CTF»' }));
+    await user.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Cancelar' }),
+    );
+
+    expect(deleteConversation).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Notas de un CTF' })).toBeInTheDocument();
   });
 
   it('disables the composer and offers a reload when models fail to load', async () => {
-    listModelsMock.mockReset();
-    listModelsMock.mockRejectedValueOnce(
-      new ApiError({
-        kind: 'network',
-        status: null,
-        code: 'NETWORK_ERROR',
-        message: 'x',
-        requestId: null,
-      }),
-    );
-    listModelsMock.mockResolvedValueOnce(MODELS);
+    vi.mocked(listModels).mockReset();
+    vi.mocked(listModels)
+      .mockRejectedValueOnce(
+        new ApiError({
+          kind: 'network',
+          status: null,
+          code: 'NETWORK_ERROR',
+          message: 'x',
+          requestId: null,
+        }),
+      )
+      .mockResolvedValueOnce(MODELS);
     const user = userEvent.setup();
     render(<ChatPage username="void" onLogout={vi.fn()} />);
 
     await waitFor(() => expect(notifyError).toHaveBeenCalled());
-    expect(screen.getByRole('textbox', { name: 'Mensaje' })).toBeDisabled();
+    expect(messageBox()).toBeDisabled();
 
     await user.click(screen.getByRole('button', { name: 'Recargar modelos' }));
 
     await waitFor(() =>
       expect(screen.getByRole('combobox', { name: 'Modelo' })).toHaveValue('b:8b'),
     );
-    expect(screen.getByRole('textbox', { name: 'Mensaje' })).toBeEnabled();
-  });
-
-  it('starts a new conversation', async () => {
-    streamChatMock.mockResolvedValue({ model: 'b:8b', content: '' });
-    const { user } = await renderReady();
-
-    await user.type(screen.getByRole('textbox', { name: 'Mensaje' }), 'hola{Enter}');
-    expect(await screen.findByText('hola')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Nueva conversación' }));
-
-    expect(screen.getByText('Escribe un mensaje para empezar.')).toBeInTheDocument();
+    expect(messageBox()).toBeEnabled();
   });
 });

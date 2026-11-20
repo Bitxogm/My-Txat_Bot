@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { streamChat } from './endpoints';
+import { deleteConversation, renameConversation, sendMessage, streamChat } from './endpoints';
 import { ApiError } from './errors';
 import { jsonResponse, mockFetch, streamResponse } from './test-utils';
 
@@ -66,5 +66,38 @@ describe('streamChat', () => {
     await expect(streamChat(body, { onToken: vi.fn() })).rejects.toMatchObject({
       kind: 'network',
     });
+  });
+});
+
+describe('conversation endpoints', () => {
+  it('sendMessage streams from the conversation messages endpoint', async () => {
+    const fetchMock = mockFetch(
+      streamResponse([
+        'event: token\ndata: {"content": "ok"}\n\n',
+        'event: done\ndata: {"model": "m"}\n\n',
+      ]),
+    );
+
+    await expect(
+      sendMessage('abc', { content: 'hola', model: 'm' }, { onToken: vi.fn() }),
+    ).resolves.toEqual({ model: 'm', content: 'ok' });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/conversations/abc/messages');
+    expect(init?.body).toBe('{"content":"hola","model":"m"}');
+  });
+
+  it('encodes ids and uses the right methods', async () => {
+    const fetchMock = mockFetch(
+      new Response(null, { status: 204 }),
+      jsonResponse(200, { id: 'x', title: 'T', model: 'm', created_at: '', updated_at: '' }),
+    );
+
+    await deleteConversation('a/b');
+    await renameConversation('x', 'T');
+
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/conversations/a%2Fb');
+    expect(fetchMock.mock.calls[0][1]?.method).toBe('DELETE');
+    expect(fetchMock.mock.calls[1][1]?.method).toBe('PATCH');
+    expect(fetchMock.mock.calls[1][1]?.body).toBe('{"title":"T"}');
   });
 });

@@ -4,6 +4,9 @@ import { readSse } from './sse';
 import type {
   ChatRequest,
   ChatResult,
+  Conversation,
+  ConversationDetail,
+  ConversationList,
   HealthResponse,
   LoginRequest,
   MeResponse,
@@ -49,16 +52,13 @@ function asString(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
 }
 
-/**
- * Streams a chat reply. Calls onToken per chunk and resolves with the full reply on `done`.
- * Throws ApiError (HTTP error before the stream, `error` event, or a cut connection) or the
- * AbortError from `signal`.
- */
-export async function streamChat(
-  body: ChatRequest,
+async function streamReply(
+  path: string,
+  body: unknown,
+  fallbackModel: string,
   { onToken, signal }: StreamChatOptions,
 ): Promise<ChatResult> {
-  const response = await send('/chat', {
+  const response = await send(path, {
     method: 'POST',
     body,
     signal,
@@ -75,7 +75,7 @@ export async function streamChat(
         content += token;
         onToken(token);
       } else if (event === 'done') {
-        return { model: asString(payload.model) ?? body.model ?? '', content };
+        return { model: asString(payload.model) ?? fallbackModel, content };
       } else if (event === 'error') {
         throw new ApiError({
           kind: 'server',
@@ -92,4 +92,50 @@ export async function streamChat(
   }
   // The stream ended without `done`: the connection was cut.
   throw networkError();
+}
+
+/**
+ * Stateless chat: streams a reply to the whole history sent by the client. Calls onToken per
+ * chunk and resolves with the full reply on `done`. Throws ApiError (HTTP error before the
+ * stream, `error` event, or a cut connection) or the AbortError from `signal`.
+ */
+export function streamChat(body: ChatRequest, options: StreamChatOptions): Promise<ChatResult> {
+  return streamReply('/chat', body, body.model ?? '', options);
+}
+
+export function listConversations(signal?: AbortSignal): Promise<ConversationList> {
+  return request<ConversationList>('/conversations', { signal });
+}
+
+export function createConversation(body: { model?: string }): Promise<Conversation> {
+  return request<Conversation>('/conversations', { method: 'POST', body });
+}
+
+export function getConversation(id: string, signal?: AbortSignal): Promise<ConversationDetail> {
+  return request<ConversationDetail>(`/conversations/${encodeURIComponent(id)}`, { signal });
+}
+
+export function renameConversation(id: string, title: string): Promise<Conversation> {
+  return request<Conversation>(`/conversations/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: { title },
+  });
+}
+
+export async function deleteConversation(id: string): Promise<void> {
+  await send(`/conversations/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+/** Persistent chat: the server stores the turn and builds the history. Same events as streamChat. */
+export function sendMessage(
+  id: string,
+  body: { content: string; model?: string },
+  options: StreamChatOptions,
+): Promise<ChatResult> {
+  return streamReply(
+    `/conversations/${encodeURIComponent(id)}/messages`,
+    body,
+    body.model ?? '',
+    options,
+  );
 }
