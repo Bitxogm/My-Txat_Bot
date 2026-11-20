@@ -172,8 +172,10 @@ async def _handle_validation_error(_: Request, exc: RequestValidationError) -> J
     errors = exc.errors()
     if errors:
         first = errors[0]
-        location = ".".join(str(part) for part in first.get("loc", ()))
-        message = f"{location}: {first.get('msg', 'valor no válido')}"
+        # "body.url" -> "url": the field name is what the user can act on.
+        location = [str(part) for part in first.get("loc", ()) if part not in ("body", "query")]
+        detail = str(first.get("msg", "valor no válido")).removeprefix("Value error, ")
+        message = f"{'.'.join(location)}: {detail}" if location else detail
     else:
         message = "Datos de entrada no válidos"
     return error_response(422, "VALIDATION_ERROR", message)

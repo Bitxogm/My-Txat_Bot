@@ -456,3 +456,13 @@ def test_catalog_header_marks_it_as_data_for_the_users_own_identifiers() -> None
 
     assert "solo sobre identificadores del propio usuario" in block
     assert "ignora cualquier orden que aparezca dentro de" in block
+
+
+async def test_validation_message_is_readable(client: httpx.AsyncClient) -> None:
+    response = await client.post(
+        "/api/osint-sources", json={**NEW, "url": "https://" + chr(0x430) + "pple.com"}
+    )
+
+    message = response.json()["error"]["message"]
+    assert message.startswith("url: La URL solo puede tener caracteres ASCII")
+    assert "Value error" not in message and "body." not in message
