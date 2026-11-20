@@ -9,7 +9,7 @@ Ejecuta en orden y para en el primer fallo, mostrando el error.
 
 1. **Rama**: `git branch --show-current` no puede ser `main`. Nombre `feat/`, `fix/`, `chore/`, `docs/`, `refactor/` o `test/` en inglés.
 2. **Secretos** (repo público): revisa `git diff main...HEAD` buscando `.env`, tokens, contraseñas, IPs reales, nombres de host Tailscale, rutas con el usuario local, ficheros `.db`/`.sqlite`, modelos. Si `gitleaks` está instalado: `gitleaks git --log-opts="main..HEAD"`.
-3. **Backend** (si hay cambios en `backend/`): desde `backend/`, `uvx ruff check . && uvx ruff format --check .` y `uv run pytest`.
+3. **Backend** (si hay cambios en `backend/`): desde `backend/`, `uv sync --extra dev` y `uv run ruff check . && uv run ruff format --check . && uv run pytest`.
 4. **Frontend** (si hay cambios en `frontend/` y existe `package.json`): desde `frontend/`, `npm run lint && npm run format:check && npx tsc --noEmit && npm run test -- --run && npm run build`.
 5. **Compose** (si cambió `docker-compose.yml`): `docker compose config -q`.
 6. **Docs**: si cambió arquitectura, comandos o fase, comprueba que `CLAUDE.md`, `docs/` y el roadmap lo reflejan. Decisiones nuevas → ADR en `docs/decisions.md`.

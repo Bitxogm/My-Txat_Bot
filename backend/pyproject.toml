@@ -3,15 +3,24 @@ name = "txatbot-backend"
 version = "0.0.0"
 description = "Backend FastAPI de Txat_bot"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "fastapi>=0.165.0",
+    "httpx>=0.28.1",
+    "pydantic-settings>=2.16.3",
+    "uvicorn[standard]>=0.54.0",
+]
 
 [project.optional-dependencies]
-dev = ["ruff", "pytest", "pytest-asyncio", "httpx"]
+dev = [
+    "ruff",
+    "pytest",
+    "pytest-asyncio",
+]
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-src = ["app", "tests"]
+src = ["."]
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "B", "UP", "S", "ASYNC", "RUF"]
@@ -24,4 +33,6 @@ quote-style = "double"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
