@@ -31,6 +31,7 @@ uv run ruff check . && uv run ruff format --check .
 uv run pytest
 uv run python -m app.cli hash-password  # AUTH_PASSWORD_HASH para backend/.env
 uv run python -m app.cli session-secret # SESSION_SECRET
+uv run python -m app.cli dev-login      # solo local: credenciales aleatorias + tarjeta de acceso rápido
 
 # frontend (desde frontend/)
 npm run dev                             # :5173, proxy /api -> VITE_DEV_BACKEND_URL (def. :8000)

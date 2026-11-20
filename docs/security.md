@@ -14,6 +14,7 @@
 - `/api/health` es público (healthcheck de Docker); `/api/models`, `/api/chat` y `/api/auth/logout` exigen sesión.
 - Rate limit global en el login: `LOGIN_MAX_FAILURES` intentos en `LOGIN_WINDOW_SECONDS` → 429 con `Retry-After`. Cada intento se reserva antes de verificar, así que las peticiones en paralelo no se lo saltan, y la verificación argon2 se hace de una en una (acota memoria y CPU).
 - Frontend: el estado de sesión sale siempre de `/api/auth/me`; cualquier 401 devuelve al login. Si el logout falla por red o 5xx, la app sigue autenticada y avisa (la cookie es httpOnly y no se puede borrar desde JS). Al cerrar sesión se corta el stream en curso.
+- Acceso rápido de desarrollo: `uv run python -m app.cli dev-login` genera una contraseña aleatoria, guarda su hash en `backend/.env` y la contraseña en `frontend/.env.local` (ambos fuera de git, permisos 600). La tarjeta del login que la rellena solo existe con `npm run dev`; el build de producción no incluye ni la tarjeta ni la contraseña, y `.dockerignore` deja fuera `.env.*`. No usar en una instancia accesible por otras personas: ahí, `hash-password`.
 - Usuario y contraseña incorrectos devuelven el mismo error y tardan lo mismo (el hash se verifica siempre). La contraseña nunca se loguea.
 
 ### Riesgos aceptados
