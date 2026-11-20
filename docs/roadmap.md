@@ -8,7 +8,7 @@ Cada fase se divide en tareas pequeñas. Una tarea = una rama = una PR.
 - [x] Esqueleto de Docker Compose (log rotation, perfil ollama con GPU)
 - [x] README, CLAUDE.md y docs (arquitectura, roadmap, decisiones, seguridad)
 
-## Fase 1: Chat mínimo (actual)
+## Fase 1: Chat mínimo (cerrada)
 - [x] Backend FastAPI: config, logging, request id, handler global de errores, `/api/health`
 - [x] Dockerfile del backend
 - [x] Proveedor Ollama: listar modelos y chat con streaming (SSE)
@@ -19,7 +19,7 @@ Cada fase se divide en tareas pequeñas. Una tarea = una rama = una PR.
 - [x] Login de un solo usuario (cookie httpOnly)
 - [x] Persistencia de conversaciones en SQLite
 
-## Fase 2: Personalidad y ficheros
+## Fase 2: Personalidad y ficheros (actual)
 - [ ] Personalidades editables (system prompt + parámetros)
 - [ ] Subida de imágenes (modelos con visión) y ficheros de texto/PDF
 - [ ] PWA (instalable, offline shell)
