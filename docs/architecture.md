@@ -52,7 +52,7 @@ Requieren sesión. `system prompt = capa base (domain/prompts.py) + personalidad
 - `GET /api/personalities` → `{ personalities: [...] }`: las 8 incorporadas (`builtin: true`, ids `builtin-*`) primero, luego las copias.
 - `GET/PATCH/DELETE /api/personalities/{id}`: editar o borrar una incorporada → 403 `PERSONALITY_BUILTIN`. `PATCH` es parcial; enviar `null` limpia un parámetro.
 - `POST /api/personalities` y `POST /api/personalities/{id}/duplicate` → 201 (siempre `builtin: false`).
-- Campos: `name` (1-60), `icon` (nombre de icono lucide), `description` (≤200), `system_prompt` (1-8000), `temperature` (0-2), `top_p` (0-1], `num_ctx` (512-32768), `default_model`; los parámetros son opcionales (null = valor del modelo).
+- Campos: `name` (1-60), `icon` (nombre de icono lucide), `description` (≤200), `system_prompt` (1-8000), `temperature` (0-2), `top_p` (0-1], `num_ctx` (512-16384: más contexto desborda la GPU de 12 GB con un 14B), `default_model`; los parámetros son opcionales (null = valor del modelo).
 
 ## Conversaciones
 

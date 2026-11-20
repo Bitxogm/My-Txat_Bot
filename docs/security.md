@@ -26,6 +26,12 @@
 - **Cookies por host, no por puerto**: otra app del mismo host bajo `/api` recibiría la cookie. Usar un nombre de host propio (MagicDNS) lo evita.
 - **Docs de la API**: con `APP_ENV=development` `/api/docs` y `/api/openapi.json` son públicos. En el despliegue real, `APP_ENV=production`.
 
+## Prompts y personalidades (ADR-013)
+- Los límites éticos y de alcance están en la capa base (`backend/app/domain/prompts.py`), fija en código. Las personalidades solo añaden tono y método, delimitadas y seguidas de un recordatorio de la base.
+- Es una barrera de prompt, no una garantía técnica: un modelo puede desobedecer, y una personalidad editada a propósito puede intentar anularla. Revisar siempre lo que sugiere el modelo.
+- `/api/chat` no acepta mensajes `system` del cliente. Las personalidades incorporadas no se pueden editar ni borrar (403, también en el repositorio), y el snapshot de una conversación no se puede cambiar por ninguna ruta.
+- Fase 2 (ficheros): el contenido de un fichero irá en un mensaje `user` delimitado como datos, nunca dentro del `system`.
+
 ## Modelos en la nube
 - Opcionales (`CLOUD_API_KEY` en `backend/.env`, ADR-012). Lo que se escribe en una conversación con un modelo del grupo "Nube" sale de la red hacia el proveedor (Groq por defecto); los modelos locales no.
 - La clave va como `SecretStr`, solo en la cabecera `Authorization` del cliente HTTP del adaptador, y nunca se loguea (los errores del proveedor se registran sin cabeceras).
