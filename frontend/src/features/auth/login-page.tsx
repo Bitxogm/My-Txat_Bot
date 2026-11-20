@@ -1,16 +1,21 @@
 import { useRef, useState, type FormEvent } from 'react';
+import { KeyRoundIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ApiError } from '@/lib/api';
 import { notifyError } from '@/lib/notify-error';
+import type { DevCredentials } from './dev-login';
+import { DEV_LOGIN } from './dev-login';
 
 interface LoginPageProps {
   onLogin: (username: string, password: string) => Promise<void>;
+  /** Injectable for tests; defaults to the dev-only credentials from .env.local. */
+  devLogin?: DevCredentials | null;
 }
 
-export function LoginPage({ onLogin }: LoginPageProps) {
+export function LoginPage({ onLogin, devLogin = DEV_LOGIN }: LoginPageProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -87,6 +92,25 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               {submitting ? 'Entrando…' : 'Entrar'}
             </Button>
           </form>
+          {devLogin && (
+            <button
+              type="button"
+              onClick={() => {
+                setUsername(devLogin.username);
+                setPassword(devLogin.password);
+                setError(null);
+              }}
+              className="hover:bg-muted mt-4 flex w-full items-center gap-3 rounded-lg border border-dashed p-3 text-left"
+            >
+              <KeyRoundIcon className="text-muted-foreground size-4 shrink-0" />
+              <span className="flex flex-col">
+                <span className="text-sm font-medium">Acceso rápido · {devLogin.username}</span>
+                <span className="text-muted-foreground text-xs">
+                  Solo en desarrollo. Rellena usuario y contraseña.
+                </span>
+              </span>
+            </button>
+          )}
         </CardContent>
       </Card>
     </main>
