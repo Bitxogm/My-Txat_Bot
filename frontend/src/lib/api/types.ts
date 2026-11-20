@@ -43,3 +43,29 @@ export interface LoginRequest {
 export interface MeResponse {
   username: string;
 }
+
+export type MessageStatus = 'done' | 'stopped' | 'error';
+
+export interface Conversation {
+  id: string;
+  title: string;
+  model: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConversationList {
+  conversations: Conversation[];
+}
+
+export interface StoredMessage {
+  id: number;
+  role: ChatRole;
+  content: string;
+  status: MessageStatus;
+  created_at: string;
+}
+
+export interface ConversationDetail extends Conversation {
+  messages: StoredMessage[];
+}
