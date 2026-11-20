@@ -3,7 +3,7 @@
 Chatbot personal 100 % local sobre Ollama, con personalidad configurable y orientado a ayudar en labs/CTF autorizados. App de navegador (PWA), totalmente dockerizada.
 
 ## Fase actual
-**Fase 0 (fundaciones)**: estructura, configs y docs. Sin código de aplicación. Siguiente: Fase 1 (chat mínimo). Detalle en `docs/roadmap.md`. Actualiza esta línea al cambiar de fase.
+**Fase 1 (chat mínimo)**: backend FastAPI + Ollama con streaming, frontend de chat, login de un usuario y persistencia en SQLite. Fase 0 cerrada. Detalle en `docs/roadmap.md`. Actualiza esta línea al cambiar de fase.
 
 ## Stack
 - **Backend**: Python 3.12, FastAPI (async), pydantic-settings, Ruff, pytest. SQLite; ChromaDB solo con RAG.
@@ -67,7 +67,7 @@ Claude hace ramas, commits, push y PRs sin pedir permiso. Void revisa y mergea; 
 6. `gh pr create` con título en inglés y descripción en español según `.github/pull_request_template.md`.
 7. `gh run watch` hasta que termine la CI. Si falla, corregir, push y repetir.
 8. Avisar a Void con el enlace de la PR y el estado de la CI.
-9. Cuando Void diga que ha mergeado: `git switch main && git pull`, borrar la rama local (`git branch -d <rama>`) y actualizar "Fase actual" si aplica.
+9. Cuando Void diga que ha mergeado: `git switch main && git pull`, borrar la rama local (`git branch -D <rama>`: con squash merge git no la ve como mergeada; comprobar antes que la PR está en `MERGED`) y actualizar "Fase actual" si aplica.
 
 `main` está protegida en GitHub (PR obligatoria, checks "Secret scan" y "Backend (Ruff + pytest)", historial lineal, solo squash merge).
 

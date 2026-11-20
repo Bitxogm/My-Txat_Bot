@@ -2,13 +2,13 @@
 
 Cada fase se divide en tareas pequeñas. Una tarea = una rama = una PR.
 
-## Fase 0: Fundaciones (actual)
+## Fase 0: Fundaciones (cerrada)
 - [x] Estructura de carpetas
 - [x] Ficheros base: .gitignore, .editorconfig, .env.example, configs de lint/format
 - [x] Esqueleto de Docker Compose (log rotation, perfil ollama con GPU)
 - [x] README, CLAUDE.md y docs (arquitectura, roadmap, decisiones, seguridad)
 
-## Fase 1: Chat mínimo
+## Fase 1: Chat mínimo (actual)
 - [ ] Backend FastAPI: config, logging, request id, handler global de errores, `/api/health`
 - [ ] Dockerfile del backend
 - [ ] Proveedor Ollama: listar modelos y chat con streaming (SSE)
