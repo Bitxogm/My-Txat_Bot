@@ -15,4 +15,11 @@ Ejecuta en orden y para en el primer fallo, mostrando el error.
 6. **Docs**: si cambió arquitectura, comandos o fase, comprueba que `CLAUDE.md`, `docs/` y el roadmap lo reflejan. Decisiones nuevas → ADR en `docs/decisions.md`.
 7. **Commits**: Conventional Commits en inglés.
 
-Resume el resultado en una tabla corta (paso, estado). No abras la PR si algo falla. La descripción de la PR va en español siguiendo `.github/pull_request_template.md`.
+Resume el resultado en una tabla corta (paso, estado). Si algo falla, corrígelo y vuelve a ejecutar el checklist; no abras la PR con nada en rojo.
+
+## Si todo está en verde, continúa sin parar
+
+8. **Push**: `git push -u origin <rama>`.
+9. **PR**: si no existe, `gh pr create --base main` con título en inglés (Conventional Commits) y descripción en español siguiendo `.github/pull_request_template.md`. Si ya existe, basta con el push.
+10. **CI**: `gh run watch` sobre el run de la rama hasta que termine. Si falla, revisa con `gh run view --log-failed`, corrige, haz push y repite.
+11. **Aviso**: entrega el enlace de la PR y el estado de la CI. **Nunca** mergees: el merge lo hace Void.

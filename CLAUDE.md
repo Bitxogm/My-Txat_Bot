@@ -57,6 +57,20 @@ Los scripts de npm y el entorno Python se crean en Fase 1.
 - Ramas, commits y títulos de PR en inglés. Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`). Ramas `feat/...`, `fix/...`, `chore/...`, `docs/...`.
 - Descripciones de PR en español, siguiendo `.github/pull_request_template.md`.
 
+### Ciclo de tarea (automático)
+Claude hace ramas, commits, push y PRs sin pedir permiso. Void revisa y mergea; Claude **nunca** mergea.
+1. `git switch main && git pull`
+2. Crear rama `feat/|fix/|chore/|docs/...` en inglés.
+3. Implementar con commits pequeños (Conventional Commits, en inglés).
+4. Ejecutar `/pre-pr`. Si algo falla, corregir y volver a ejecutarlo.
+5. `git push -u origin <rama>`
+6. `gh pr create` con título en inglés y descripción en español según `.github/pull_request_template.md`.
+7. `gh run watch` hasta que termine la CI. Si falla, corregir, push y repetir.
+8. Avisar a Void con el enlace de la PR y el estado de la CI.
+9. Cuando Void diga que ha mergeado: `git switch main && git pull`, borrar la rama local (`git branch -d <rama>`) y actualizar "Fase actual" si aplica.
+
+`main` está protegida en GitHub (PR obligatoria, checks "Secret scan" y "Backend (Ruff + pytest)", historial lineal, solo squash merge).
+
 ## Agentes
 | Agente | Se encarga de |
 | --- | --- |
