@@ -1,0 +1,58 @@
+# Secretos y entorno
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Datos locales (SQLite, uploads, vectores, backups)
+data/*
+!data/.gitkeep
+*.db
+*.sqlite
+*.sqlite3
+chroma/
+backups/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# Node / frontend
+node_modules/
+dist/
+dev-dist/
+coverage/
+*.tsbuildinfo
+.vite/
+npm-debug.log*
+pnpm-debug.log*
+
+# Modelos y pesos (nunca al repo)
+*.gguf
+*.safetensors
+models/
+
+# Editor / SO
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+
+# Claude Code (local de cada máquina)
+.claude/settings.local.json
+
+# Logs
+logs/
+*.log
