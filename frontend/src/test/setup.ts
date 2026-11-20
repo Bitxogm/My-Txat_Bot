@@ -20,3 +20,13 @@ Object.defineProperty(window, 'matchMedia', {
     dispatchEvent: vi.fn(),
   })),
 });
+
+// jsdom lacks ResizeObserver; Radix (Checkbox, Switch) uses it to measure elements.
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+if (!('ResizeObserver' in window)) {
+  Object.defineProperty(window, 'ResizeObserver', { writable: true, value: ResizeObserverStub });
+}

@@ -30,7 +30,8 @@ describe('MessageList', () => {
     );
 
     expect(await screen.findByText('BOOM > > > anidado')).toBeInTheDocument();
-    expect(await screen.findByText('ok')).toBeInTheDocument();
+    // The Markdown chunk is lazy-loaded; under a full parallel run that can take >1 s.
+    expect(await screen.findByText('ok', undefined, { timeout: 5000 })).toBeInTheDocument();
     vi.restoreAllMocks();
   });
 

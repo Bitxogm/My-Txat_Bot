@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MessageSquarePlusIcon, Trash2Icon, VenetianMaskIcon } from 'lucide-react';
+import { MessageSquarePlusIcon, RadarIcon, Trash2Icon, VenetianMaskIcon } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,10 +26,11 @@ interface ConversationSidebarProps {
   activePage: SettingsPage | null;
 }
 
-export type SettingsPage = 'personalities';
+export type SettingsPage = 'personalities' | 'osint';
 
 const SETTINGS_LINKS: { page: SettingsPage; label: string; icon: typeof VenetianMaskIcon }[] = [
   { page: 'personalities', label: 'Personalidades', icon: VenetianMaskIcon },
+  { page: 'osint', label: 'Fuentes OSINT', icon: RadarIcon },
 ];
 
 export function ConversationSidebar({

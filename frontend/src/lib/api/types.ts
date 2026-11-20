@@ -113,3 +113,41 @@ export interface PersonalityInput {
   num_ctx: number | null;
   default_model: string | null;
 }
+
+export type OsintCategory =
+  | 'breach'
+  | 'username'
+  | 'domain'
+  | 'image'
+  | 'code'
+  | 'forum'
+  | 'browser_fingerprint'
+  | 'aggregator';
+
+export interface OsintSource {
+  id: string;
+  name: string;
+  url: string;
+  category: OsintCategory;
+  description: string;
+  requires_api_key: boolean;
+  requires_payment: boolean;
+  builtin: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OsintSourceList {
+  sources: OsintSource[];
+}
+
+export interface OsintSourceInput {
+  name: string;
+  url: string;
+  category: OsintCategory;
+  description: string;
+  requires_api_key: boolean;
+  requires_payment: boolean;
+  is_active: boolean;
+}

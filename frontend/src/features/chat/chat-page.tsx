@@ -7,6 +7,7 @@ import {
   type SettingsPage,
 } from '@/features/conversations/conversation-sidebar';
 import { useConversations } from '@/features/conversations/use-conversations';
+import { OsintSourcesPage } from '@/features/osint-sources/osint-sources-page';
 import { PersonalitiesPage } from '@/features/personalities/personalities-page';
 import { PersonalityBadge } from '@/features/personalities/personality-badge';
 import { PersonalityPicker } from '@/features/personalities/personality-picker';
@@ -144,6 +145,8 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
         </header>
         {page === 'personalities' ? (
           <PersonalitiesPage store={personalities} models={models} />
+        ) : page === 'osint' ? (
+          <OsintSourcesPage />
         ) : (
           <>
             {isNewChat ? (
