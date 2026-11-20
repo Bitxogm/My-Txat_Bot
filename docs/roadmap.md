@@ -20,7 +20,7 @@ Cada fase se divide en tareas pequeñas. Una tarea = una rama = una PR.
 - [x] Persistencia de conversaciones en SQLite
 
 ## Fase 2: Personalidad y ficheros (actual)
-- [ ] Personalidades editables (system prompt + parámetros)
+- [x] Personalidades editables (system prompt + parámetros)
 - [ ] Subida de imágenes (modelos con visión) y ficheros de texto/PDF
 - [ ] PWA (instalable, offline shell)
 
