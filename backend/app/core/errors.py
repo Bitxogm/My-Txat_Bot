@@ -52,6 +52,18 @@ class BuiltinPersonalityError(AppError):
     )
 
 
+class OsintSourceNotFoundError(AppError):
+    status_code = HTTPStatus.NOT_FOUND
+    code = "OSINT_SOURCE_NOT_FOUND"
+    message = "La fuente OSINT no existe"
+
+
+class BuiltinOsintSourceError(AppError):
+    status_code = HTTPStatus.FORBIDDEN
+    code = "OSINT_SOURCE_BUILTIN"
+    message = "Las fuentes incorporadas no se pueden editar ni borrar; solo activar o desactivar."
+
+
 class BadRequestError(AppError):
     status_code = HTTPStatus.BAD_REQUEST
     code = "BAD_REQUEST"
