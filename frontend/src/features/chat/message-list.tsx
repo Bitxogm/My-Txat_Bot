@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import type { UiMessage } from './use-chat';
 
@@ -6,6 +6,11 @@ const STATUS_NOTE: Partial<Record<UiMessage['status'], string>> = {
   stopped: 'Respuesta detenida.',
   error: 'No se pudo completar la respuesta.',
 };
+
+// Loaded on demand: react-markdown + GFM + highlighting are ~75 kB gzipped, not needed to log in.
+const Markdown = lazy(() =>
+  import('./markdown/markdown').then((module) => ({ default: module.Markdown })),
+);
 
 const EMPTY_REPLY_NOTE = 'El modelo no devolvió ninguna respuesta.';
 
@@ -62,16 +67,25 @@ export function MessageList({
                 {showBubble && (
                   <div
                     className={cn(
-                      'max-w-[85%] rounded-2xl px-4 py-2 text-sm leading-relaxed break-words whitespace-pre-wrap',
+                      'rounded-2xl px-4 py-2 text-sm leading-relaxed break-words',
                       message.role === 'user'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted text-foreground',
+                        ? 'bg-primary text-primary-foreground max-w-[85%] whitespace-pre-wrap'
+                        : 'bg-muted text-foreground w-full max-w-full min-w-0',
                     )}
                   >
-                    {message.content || (
+                    {!message.content ? (
                       <span className="text-muted-foreground animate-pulse" aria-label="Generando">
                         …
                       </span>
+                    ) : message.role === 'assistant' ? (
+                      // Model output is rendered as Markdown; user text stays literal.
+                      <Suspense
+                        fallback={<div className="whitespace-pre-wrap">{message.content}</div>}
+                      >
+                        <Markdown content={message.content} />
+                      </Suspense>
+                    ) : (
+                      message.content
                     )}
                   </div>
                 )}
