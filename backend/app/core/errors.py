@@ -79,6 +79,12 @@ class EmptyReplyError(AppError):
     message = "El modelo no devolvió ninguna respuesta"
 
 
+class ModelRateLimitedError(AppError):
+    status_code = HTTPStatus.TOO_MANY_REQUESTS
+    code = "MODEL_RATE_LIMITED"
+    message = "Se ha alcanzado el límite de uso del proveedor en la nube. Espera un poco."
+
+
 class ModelNotFoundError(AppError):
     status_code = HTTPStatus.NOT_FOUND
     code = "MODEL_NOT_FOUND"

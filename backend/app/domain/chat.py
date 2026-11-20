@@ -17,3 +17,5 @@ class ModelInfo:
     family: str | None = None
     parameter_size: str | None = None
     quantization: str | None = None
+    # True when the model runs on a third-party service: messages leave the local network.
+    remote: bool = False

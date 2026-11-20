@@ -1,0 +1,153 @@
+"""LLMProvider for OpenAI-compatible chat APIs (Groq, OpenRouter, Cerebras...).
+
+Only `GET /models` and streaming `POST /chat/completions` are used, so any provider that
+implements that subset works by changing CLOUD_BASE_URL.
+"""
+
+import json
+import logging
+from collections.abc import AsyncIterator, Sequence
+from typing import Any
+
+import httpx
+
+from app.core.errors import (
+    EmptyReplyError,
+    ModelNotFoundError,
+    ModelRateLimitedError,
+    ModelUnavailableError,
+)
+from app.domain.chat import ChatMessage, ModelInfo
+
+logger = logging.getLogger(__name__)
+
+# Groq and others list speech, moderation and embedding models next to chat ones.
+_NON_CHAT_MARKERS = ("whisper", "tts", "guard", "embed", "moderation", "playai", "orpheus")
+
+
+class OpenAICompatibleProvider:
+    def __init__(
+        self,
+        client: httpx.AsyncClient,
+        name: str,
+        allowed_models: Sequence[str] = (),
+        chat_timeout: httpx.Timeout | None = None,
+    ) -> None:
+        self._client = client
+        self.name = name
+        self._allowed = set(allowed_models)
+        self._chat_timeout = chat_timeout or client.timeout
+
+    async def is_available(self) -> bool:
+        try:
+            response = await self._client.get("/models")
+        except httpx.HTTPError as exc:
+            logger.warning("%s unreachable: %s", self.name, type(exc).__name__)
+            return False
+        return response.status_code == httpx.codes.OK
+
+    async def list_models(self) -> list[ModelInfo]:
+        try:
+            response = await self._client.get("/models")
+        except httpx.HTTPError as exc:
+            raise self._unavailable(exc) from exc
+        self._raise_for_status(response, model=None)
+        try:
+            raw = response.json().get("data", [])
+        except ValueError as exc:
+            raise ModelUnavailableError("Respuesta no válida del proveedor en la nube") from exc
+        ids = sorted(str(m.get("id", "")) for m in raw if isinstance(m, dict) and m.get("id"))
+        if self._allowed:
+            ids = [i for i in ids if i in self._allowed]
+        else:
+            ids = [i for i in ids if not any(marker in i.lower() for marker in _NON_CHAT_MARKERS)]
+        return [ModelInfo(name=i, size_bytes=0, remote=True) for i in ids]
+
+    async def stream_chat(self, model: str, messages: Sequence[ChatMessage]) -> AsyncIterator[str]:
+        payload = {
+            "model": model,
+            "messages": [{"role": m.role, "content": m.content} for m in messages],
+            "stream": True,
+        }
+        produced = False
+        try:
+            async with self._client.stream(
+                "POST", "/chat/completions", json=payload, timeout=self._chat_timeout
+            ) as response:
+                if response.status_code != httpx.codes.OK:
+                    await response.aread()
+                    self._raise_for_status(response, model=model)
+                async for line in response.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    data = line.removeprefix("data:").strip()
+                    if data == "[DONE]":
+                        break
+                    chunk = _parse(data)
+                    if "error" in chunk:
+                        logger.warning("%s stream error: %s", self.name, _error_text(chunk))
+                        raise ModelUnavailableError("El modelo en la nube falló al responder")
+                    choice = (chunk.get("choices") or [{}])[0]
+                    content = (choice.get("delta") or {}).get("content") or ""
+                    if content:
+                        produced = True
+                        yield content
+                    if choice.get("finish_reason") == "length" and not produced:
+                        raise EmptyReplyError(
+                            "El modelo agotó el límite de longitud sin llegar a responder."
+                        )
+        except httpx.HTTPError as exc:
+            raise self._unavailable(exc) from exc
+        if not produced:
+            raise EmptyReplyError
+
+    def _raise_for_status(self, response: httpx.Response, model: str | None) -> None:
+        status = response.status_code
+        if status == httpx.codes.OK:
+            return
+        # Never log request headers: they carry the API key.
+        logger.warning("%s answered %d: %.300s", self.name, status, response.text)
+        if status in (httpx.codes.UNAUTHORIZED, httpx.codes.FORBIDDEN):
+            raise ModelUnavailableError(
+                f"{self.name} rechazó la clave de API (revisa CLOUD_API_KEY)"
+            )
+        if status == httpx.codes.NOT_FOUND and model:
+            raise ModelNotFoundError(f"El modelo '{model}' no existe en {self.name}")
+        if status == httpx.codes.TOO_MANY_REQUESTS:
+            retry_after = response.headers.get("retry-after")
+            headers = {"Retry-After": retry_after} if retry_after else None
+            raise ModelRateLimitedError(headers=headers)
+        raise ModelUnavailableError(f"{self.name} no está disponible ahora mismo")
+
+    def _unavailable(self, exc: httpx.HTTPError) -> ModelUnavailableError:
+        logger.warning("%s request failed: %s", self.name, type(exc).__name__)
+        if isinstance(exc, httpx.TimeoutException):
+            return ModelUnavailableError(f"{self.name} tardó demasiado en responder")
+        return ModelUnavailableError(f"No se puede conectar con {self.name}")
+
+
+def build_openai_compatible_client(
+    base_url: str, api_key: str, timeout_seconds: float
+) -> httpx.AsyncClient:
+    return httpx.AsyncClient(
+        base_url=base_url.rstrip("/"),
+        headers={"Authorization": f"Bearer {api_key}"},
+        timeout=timeout_seconds,
+    )
+
+
+def _parse(data: str) -> dict[str, Any]:
+    try:
+        parsed = json.loads(data)
+    except json.JSONDecodeError as exc:
+        raise ModelUnavailableError("Respuesta no válida del proveedor en la nube") from exc
+    if not isinstance(parsed, dict):
+        raise ModelUnavailableError("Respuesta no válida del proveedor en la nube")
+    return parsed
+
+
+def _error_text(chunk: dict[str, Any]) -> str:
+    error = chunk.get("error")
+    if isinstance(error, dict):
+        return str(error.get("message", ""))[:300]
+    return str(error)[:300]
