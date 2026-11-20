@@ -6,6 +6,7 @@ from app.core.auth import SESSION_COOKIE, AuthService, Session
 from app.core.config import Settings
 from app.ports.conversations import ConversationRepository
 from app.ports.llm import LLMProvider
+from app.ports.osint_sources import OsintSourceRepository
 from app.ports.personalities import PersonalityRepository
 
 
@@ -26,6 +27,11 @@ def get_conversation_repository(request: Request) -> ConversationRepository:
 
 def get_personality_repository(request: Request) -> PersonalityRepository:
     repository: PersonalityRepository = request.app.state.personalities
+    return repository
+
+
+def get_osint_source_repository(request: Request) -> OsintSourceRepository:
+    repository: OsintSourceRepository = request.app.state.osint_sources
     return repository
 
 

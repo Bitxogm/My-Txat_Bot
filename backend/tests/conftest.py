@@ -8,10 +8,12 @@ from fastapi import FastAPI
 
 from app.adapters.sqlite.conversations import SqliteConversationRepository
 from app.adapters.sqlite.database import connect
+from app.adapters.sqlite.osint_sources import SqliteOsintSourceRepository
 from app.adapters.sqlite.personalities import SqlitePersonalityRepository
 from app.api.dependencies import get_llm_provider
 from app.core.config import Settings
 from app.core.errors import AppError
+from app.domain.builtin_osint_sources import BUILTIN_OSINT_SOURCES
 from app.domain.builtin_personalities import BUILTIN_PERSONALITIES
 from app.domain.chat import ChatMessage, ModelInfo
 from app.domain.personality import GenerationParams
@@ -101,16 +103,25 @@ async def personality_repo(db: aiosqlite.Connection) -> SqlitePersonalityReposit
 
 
 @pytest.fixture
+async def osint_repo(db: aiosqlite.Connection) -> SqliteOsintSourceRepository:
+    repository = SqliteOsintSourceRepository(db)
+    await repository.seed_builtins(BUILTIN_OSINT_SOURCES)
+    return repository
+
+
+@pytest.fixture
 def app(
     fake_llm: FakeLLMProvider,
     repo: SqliteConversationRepository,
     personality_repo: SqlitePersonalityRepository,
+    osint_repo: SqliteOsintSourceRepository,
 ) -> FastAPI:
     # ASGITransport doesn't run the lifespan, so wire what it would have created.
     application = create_app(make_settings())
     application.dependency_overrides[get_llm_provider] = lambda: fake_llm
     application.state.conversations = repo
     application.state.personalities = personality_repo
+    application.state.osint_sources = osint_repo
     return application
 
 
