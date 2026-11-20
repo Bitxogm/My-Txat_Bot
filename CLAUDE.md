@@ -47,6 +47,7 @@ Dependencias Python con uv (`uv add`), siempre con `uv.lock` commiteado.
 - Frontend: prohibido `fetch` fuera de `src/lib/api` (lo bloquea ESLint). Componentes de `components/ui/` no se editan a mano salvo necesidad.
 - Sin `any` en TypeScript. Sin secretos ni URLs fijas en el código.
 - Las decisiones de arquitectura nuevas se registran como ADR en `docs/decisions.md`.
+- Prompts (ADR-013): la capa base (`domain/prompts.py`) lleva los límites éticos y no es editable desde la UI. No mover esos límites a una personalidad.
 
 ## Manejo de errores (convención obligatoria)
 - Formato único de error: `{ "error": { "code", "message", "request_id" } }`.

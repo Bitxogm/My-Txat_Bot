@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
@@ -8,7 +8,8 @@ from app.api.dependencies import get_app_settings, get_llm_provider
 from app.api.streaming import stream_reply
 from app.core.config import Settings
 from app.core.errors import BadRequestError
-from app.domain.chat import ChatMessage, Role
+from app.domain.chat import ChatMessage
+from app.domain.prompts import compose_system_prompt
 from app.ports.llm import LLMProvider
 
 router = APIRouter(tags=["chat"])
@@ -18,7 +19,8 @@ MAX_CONTENT_CHARS = 100_000
 
 
 class ChatMessageIn(BaseModel):
-    role: Role
+    # No "system": the client must not be able to add instructions after the base layer.
+    role: Literal["user", "assistant"]
     content: str = Field(min_length=1, max_length=MAX_CONTENT_CHARS)
 
 
@@ -37,10 +39,14 @@ async def chat(
     llm: Annotated[LLMProvider, Depends(get_llm_provider)],
     settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> StreamingResponse:
-    """Stateless chat: the client sends the whole history. See stream_reply for the events."""
+    """Stateless chat: the client sends the whole history. See stream_reply for the events.
+
+    The base layer is always prepended, so this path has the same limits as conversations.
+    """
     model = body.model or settings.default_model
     if not model:
         raise BadRequestError("Indica un modelo: no hay DEFAULT_MODEL configurado")
 
-    messages = [ChatMessage(role=m.role, content=m.content) for m in body.messages]
+    messages = [ChatMessage(role="system", content=compose_system_prompt(""))]
+    messages += [ChatMessage(role=m.role, content=m.content) for m in body.messages]
     return await stream_reply(llm, model, messages)

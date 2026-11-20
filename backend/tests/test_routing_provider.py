@@ -5,6 +5,7 @@ import pytest
 from app.adapters.routing import RoutingLLMProvider
 from app.core.errors import ModelUnavailableError
 from app.domain.chat import ChatMessage, ModelInfo
+from app.domain.personality import GenerationParams
 
 
 class Stub:
@@ -22,7 +23,12 @@ class Stub:
             raise ModelUnavailableError()
         return [ModelInfo(name=m, size_bytes=0, remote=self.name != "local") for m in self._models]
 
-    async def stream_chat(self, model: str, messages: Sequence[ChatMessage]) -> AsyncIterator[str]:
+    async def stream_chat(
+        self,
+        model: str,
+        messages: Sequence[ChatMessage],
+        params: GenerationParams | None = None,
+    ) -> AsyncIterator[str]:
         self.calls.append(model)
         yield self.name
 

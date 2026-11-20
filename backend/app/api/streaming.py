@@ -10,6 +10,7 @@ from app.core.errors import AppError
 from app.core.request_id import get_request_id
 from app.domain.chat import ChatMessage
 from app.domain.conversation import MessageStatus
+from app.domain.personality import GenerationParams
 from app.ports.llm import LLMProvider
 
 logger = logging.getLogger(__name__)
@@ -38,13 +39,14 @@ async def stream_reply(
     model: str,
     messages: Sequence[ChatMessage],
     on_finish: OnFinish | None = None,
+    params: GenerationParams | None = None,
 ) -> StreamingResponse:
     """Stream a model reply as SSE: `token`* then `done`, or `error`.
 
     Errors before the first token raise, so the route answers with the usual JSON error and
     HTTP status; errors after streaming starts arrive as an `error` event.
     """
-    chunks = aiter(llm.stream_chat(model, messages))
+    chunks = aiter(llm.stream_chat(model, messages, params))
     # Pull the first chunk here so early failures become a normal HTTP error response.
     try:
         first = await anext(chunks, None)

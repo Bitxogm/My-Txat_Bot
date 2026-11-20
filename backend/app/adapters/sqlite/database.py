@@ -26,6 +26,33 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX idx_messages_conversation ON messages (conversation_id, id);
     """,
+    # v2: personalities (ADR-013). Conversations keep a snapshot of the personality they were
+    # created with; old conversations get NULL/'' (base layer only, model defaults).
+    """
+    CREATE TABLE personalities (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        icon TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        system_prompt TEXT NOT NULL,
+        temperature REAL,
+        top_p REAL,
+        num_ctx INTEGER,
+        default_model TEXT,
+        builtin INTEGER NOT NULL DEFAULT 0 CHECK (builtin IN (0, 1)),
+        position INTEGER NOT NULL DEFAULT 1000,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+    ALTER TABLE conversations ADD COLUMN personality_id TEXT
+        REFERENCES personalities (id) ON DELETE SET NULL;
+    ALTER TABLE conversations ADD COLUMN personality_name TEXT;
+    ALTER TABLE conversations ADD COLUMN personality_icon TEXT;
+    ALTER TABLE conversations ADD COLUMN system_prompt TEXT NOT NULL DEFAULT '';
+    ALTER TABLE conversations ADD COLUMN temperature REAL;
+    ALTER TABLE conversations ADD COLUMN top_p REAL;
+    ALTER TABLE conversations ADD COLUMN num_ctx INTEGER;
+    """,
 ]
 
 

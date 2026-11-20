@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator, Callable, Sequence
 
+import aiosqlite
 import httpx
 import pytest
 from argon2 import PasswordHasher
@@ -7,10 +8,13 @@ from fastapi import FastAPI
 
 from app.adapters.sqlite.conversations import SqliteConversationRepository
 from app.adapters.sqlite.database import connect
+from app.adapters.sqlite.personalities import SqlitePersonalityRepository
 from app.api.dependencies import get_llm_provider
 from app.core.config import Settings
 from app.core.errors import AppError
+from app.domain.builtin_personalities import BUILTIN_PERSONALITIES
 from app.domain.chat import ChatMessage, ModelInfo
+from app.domain.personality import GenerationParams
 from app.main import create_app
 
 
@@ -22,6 +26,7 @@ class FakeLLMProvider:
         self.fail_before: AppError | None = None
         self.fail_after: AppError | None = None
         self.calls: list[tuple[str, list[ChatMessage]]] = []
+        self.params: list[GenerationParams | None] = []
 
     async def is_available(self) -> bool:
         return self.available
@@ -31,8 +36,14 @@ class FakeLLMProvider:
             raise self.fail_before
         return self.models
 
-    async def stream_chat(self, model: str, messages: Sequence[ChatMessage]) -> AsyncIterator[str]:
+    async def stream_chat(
+        self,
+        model: str,
+        messages: Sequence[ChatMessage],
+        params: GenerationParams | None = None,
+    ) -> AsyncIterator[str]:
         self.calls.append((model, list(messages)))
+        self.params.append(params)
         if self.fail_before:
             raise self.fail_before
         for chunk in self.chunks:
@@ -71,18 +82,35 @@ def fake_llm() -> FakeLLMProvider:
 
 
 @pytest.fixture
-async def repo() -> AsyncIterator[SqliteConversationRepository]:
-    db = await connect(":memory:")
-    yield SqliteConversationRepository(db)
-    await db.close()
+async def db() -> AsyncIterator[aiosqlite.Connection]:
+    connection = await connect(":memory:")
+    yield connection
+    await connection.close()
 
 
 @pytest.fixture
-def app(fake_llm: FakeLLMProvider, repo: SqliteConversationRepository) -> FastAPI:
+def repo(db: aiosqlite.Connection) -> SqliteConversationRepository:
+    return SqliteConversationRepository(db)
+
+
+@pytest.fixture
+async def personality_repo(db: aiosqlite.Connection) -> SqlitePersonalityRepository:
+    repository = SqlitePersonalityRepository(db)
+    await repository.seed_builtins(BUILTIN_PERSONALITIES)
+    return repository
+
+
+@pytest.fixture
+def app(
+    fake_llm: FakeLLMProvider,
+    repo: SqliteConversationRepository,
+    personality_repo: SqlitePersonalityRepository,
+) -> FastAPI:
     # ASGITransport doesn't run the lifespan, so wire what it would have created.
     application = create_app(make_settings())
     application.dependency_overrides[get_llm_provider] = lambda: fake_llm
     application.state.conversations = repo
+    application.state.personalities = personality_repo
     return application
 
 

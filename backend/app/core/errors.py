@@ -37,6 +37,21 @@ class ConversationNotFoundError(AppError):
     message = "La conversación no existe"
 
 
+class PersonalityNotFoundError(AppError):
+    status_code = HTTPStatus.NOT_FOUND
+    code = "PERSONALITY_NOT_FOUND"
+    message = "La personalidad no existe"
+
+
+class BuiltinPersonalityError(AppError):
+    status_code = HTTPStatus.FORBIDDEN
+    code = "PERSONALITY_BUILTIN"
+    message = (
+        "Las personalidades incorporadas no se pueden editar ni borrar."
+        " Duplícala para personalizarla."
+    )
+
+
 class BadRequestError(AppError):
     status_code = HTTPStatus.BAD_REQUEST
     code = "BAD_REQUEST"

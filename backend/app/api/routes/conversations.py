@@ -3,32 +3,53 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from app.api.dependencies import (
     get_app_settings,
     get_conversation_repository,
     get_llm_provider,
+    get_personality_repository,
 )
 from app.api.routes.chat import MAX_CONTENT_CHARS
+from app.api.routes.personalities import PERSONALITY_ID_PATTERN
 from app.api.streaming import stream_reply
 from app.core.config import Settings
-from app.core.errors import BadRequestError, ConversationNotFoundError
+from app.core.errors import (
+    BadRequestError,
+    ConversationNotFoundError,
+    PersonalityNotFoundError,
+)
 from app.domain.chat import ChatMessage, Role
 from app.domain.conversation import (
     TITLE_MAX_CHARS,
     Conversation,
     MessageStatus,
+    PersonalitySnapshot,
     StoredMessage,
     title_from_message,
 )
+from app.domain.personality import DEFAULT_PERSONALITY_ID
+from app.domain.prompts import compose_system_prompt
 from app.ports.conversations import ConversationRepository
 from app.ports.llm import LLMProvider
+from app.ports.personalities import PersonalityRepository
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
 ConversationId = Annotated[str, Path(pattern=r"^[0-9a-f]{32}$")]
 Repo = Annotated[ConversationRepository, Depends(get_conversation_repository)]
+
+
+class PersonalityRef(BaseModel):
+    """The personality a conversation was created with (snapshot, read-only).
+
+    `id` is null if that personality has since been deleted; name and icon are kept.
+    """
+
+    id: str | None
+    name: str
+    icon: str | None
 
 
 class ConversationOut(BaseModel):
@@ -37,11 +58,21 @@ class ConversationOut(BaseModel):
     model: str
     created_at: datetime
     updated_at: datetime
+    personality: PersonalityRef | None
 
     @classmethod
     def of(cls, c: Conversation) -> "ConversationOut":
+        snap = c.personality
         return cls(
-            id=c.id, title=c.title, model=c.model, created_at=c.created_at, updated_at=c.updated_at
+            id=c.id,
+            title=c.title,
+            model=c.model,
+            created_at=c.created_at,
+            updated_at=c.updated_at,
+            # Conversations from before personalities existed have no snapshot name.
+            personality=(
+                PersonalityRef(id=snap.id, name=snap.name, icon=snap.icon) if snap.name else None
+            ),
         )
 
 
@@ -68,6 +99,9 @@ class ConversationDetail(ConversationOut):
 
 
 class ConversationPatch(BaseModel):
+    # Only the title is editable; the personality snapshot can't be changed (ADR-013).
+    model_config = ConfigDict(extra="forbid")
+
     title: Annotated[
         str, StringConstraints(strip_whitespace=True, min_length=1, max_length=TITLE_MAX_CHARS)
     ]
@@ -79,7 +113,10 @@ class SendMessage(BaseModel):
 
 
 class NewConversation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     model: str | None = Field(default=None, min_length=1, max_length=200)
+    personality_id: str | None = Field(default=None, pattern=PERSONALITY_ID_PATTERN)
 
 
 async def _require(repo: ConversationRepository, conversation_id: str) -> Conversation:
@@ -105,10 +142,23 @@ async def list_conversations(repo: Repo) -> ConversationList:
 async def create_conversation(
     body: NewConversation,
     repo: Repo,
+    personalities: Annotated[PersonalityRepository, Depends(get_personality_repository)],
     settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> ConversationOut:
-    model = _resolve_model(body.model, "", settings)
-    return ConversationOut.of(await repo.create("Nueva conversación", model))
+    """The personality is fixed here: its prompt and parameters are copied into the conversation."""
+    personality = await personalities.get(body.personality_id or DEFAULT_PERSONALITY_ID)
+    if personality is None:
+        raise PersonalityNotFoundError
+    fields = personality.fields
+    model = _resolve_model(body.model, fields.default_model or "", settings)
+    snapshot = PersonalitySnapshot(
+        id=personality.id,
+        name=fields.name,
+        icon=fields.icon,
+        system_prompt=fields.system_prompt,
+        params=fields.params,
+    )
+    return ConversationOut.of(await repo.create("Nueva conversación", model, snapshot))
 
 
 @router.get("/{conversation_id}")
@@ -167,7 +217,12 @@ async def send_message(
         title=title_from_message(body.content) if is_first_message else None,
     )
 
-    history = [
+    snapshot = conversation.personality
+    # The system prompt is composed on every turn (never stored as a message): the base layer
+    # comes from code, so a fix to it also reaches older conversations; the personality layer
+    # is the conversation's own snapshot.
+    history = [ChatMessage(role="system", content=compose_system_prompt(snapshot.system_prompt))]
+    history += [
         ChatMessage(role=m.role, content=m.content)
         for m in previous
         if m.status != "error" and m.content.strip()
@@ -177,4 +232,4 @@ async def send_message(
     async def save_reply(content: str, status: MessageStatus) -> None:
         await repo.add_message(conversation_id, "assistant", content, status)
 
-    return await stream_reply(llm, model, history, on_finish=save_reply)
+    return await stream_reply(llm, model, history, on_finish=save_reply, params=snapshot.params)

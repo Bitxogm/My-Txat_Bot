@@ -6,6 +6,7 @@ from app.core.auth import SESSION_COOKIE, AuthService, Session
 from app.core.config import Settings
 from app.ports.conversations import ConversationRepository
 from app.ports.llm import LLMProvider
+from app.ports.personalities import PersonalityRepository
 
 
 def get_llm_provider(request: Request) -> LLMProvider:
@@ -20,6 +21,11 @@ def get_app_settings(request: Request) -> Settings:
 
 def get_conversation_repository(request: Request) -> ConversationRepository:
     repository: ConversationRepository = request.app.state.conversations
+    return repository
+
+
+def get_personality_repository(request: Request) -> PersonalityRepository:
+    repository: PersonalityRepository = request.app.state.personalities
     return repository
 
 
