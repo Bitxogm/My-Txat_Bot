@@ -23,6 +23,7 @@ vi.mock('@/lib/api', async (importOriginal) => ({
   listModels: vi.fn(),
   listConversations: vi.fn(),
   listPersonalities: vi.fn(),
+  listOsintSources: vi.fn(),
   createConversation: vi.fn(),
   getConversation: vi.fn(),
   deleteConversation: vi.fn(),
@@ -335,5 +336,17 @@ describe('ChatPage personalities', () => {
 
     expect(await screen.findByRole('heading', { name: 'Personalidades' })).toBeInTheDocument();
     expect(screen.queryByRole('textbox', { name: 'Mensaje' })).not.toBeInTheDocument();
+  });
+});
+
+describe('ChatPage settings navigation', () => {
+  it('opens the OSINT sources page from the sidebar', async () => {
+    const { listOsintSources } = await import('@/lib/api');
+    vi.mocked(listOsintSources).mockResolvedValue({ sources: [] });
+    const { user } = await renderReady();
+
+    await user.click(screen.getByRole('button', { name: 'Fuentes OSINT' }));
+
+    expect(await screen.findByRole('heading', { name: 'Fuentes OSINT' })).toBeInTheDocument();
   });
 });
