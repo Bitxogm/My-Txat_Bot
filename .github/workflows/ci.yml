@@ -33,16 +33,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
+      - name: Install (locked)
+        run: uv sync --locked --extra dev
       - name: Ruff lint
-        run: uvx ruff check .
+        run: uv run ruff check .
       - name: Ruff format
-        run: uvx ruff format --check .
+        run: uv run ruff format --check .
       - name: Tests
-        if: hashFiles('backend/tests/**/*.py') != ''
-        run: |
-          uv venv
-          uv pip install -e ".[dev]"
-          uv run pytest
+        run: uv run pytest
 
   frontend:
     name: Frontend (ESLint + Prettier + tsc + Vitest + build)
