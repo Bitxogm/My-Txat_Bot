@@ -1,4 +1,4 @@
-# Esqueleto de Fase 0. Los Dockerfile de backend y frontend llegan en Fase 1.
+# El Dockerfile del frontend llega con el scaffold del frontend (Fase 1).
 # Uso:
 #   docker compose up -d                      -> backend + frontend (Ollama remoto vía Tailscale)
 #   docker compose --profile ollama up -d     -> además levanta Ollama local con GPU NVIDIA
@@ -13,6 +13,9 @@ services:
   backend:
     build:
       context: ./backend
+      args:
+        APP_UID: ${APP_UID:-1000}
+        APP_GID: ${APP_GID:-1000}
     env_file:
       - ./backend/.env
     volumes:
@@ -24,6 +27,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 10s
     restart: unless-stopped
     logging: *default-logging
 
