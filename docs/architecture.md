@@ -45,15 +45,24 @@ backend/app/
 - `GET /api/auth/me` → `{ username }` o 401 `UNAUTHORIZED`.
 - Detalles de seguridad en [security.md](security.md).
 
+## Personalidades (ADR-013)
+
+Requieren sesión. `system prompt = capa base (domain/prompts.py) + personalidad`.
+
+- `GET /api/personalities` → `{ personalities: [...] }`: las 8 incorporadas (`builtin: true`, ids `builtin-*`) primero, luego las copias.
+- `GET/PATCH/DELETE /api/personalities/{id}`: editar o borrar una incorporada → 403 `PERSONALITY_BUILTIN`. `PATCH` es parcial; enviar `null` limpia un parámetro.
+- `POST /api/personalities` y `POST /api/personalities/{id}/duplicate` → 201 (siempre `builtin: false`).
+- Campos: `name` (1-60), `icon` (nombre de icono lucide), `description` (≤200), `system_prompt` (1-8000), `temperature` (0-2), `top_p` (0-1], `num_ctx` (512-32768), `default_model`; los parámetros son opcionales (null = valor del modelo).
+
 ## Conversaciones
 
 Requieren sesión. Persisten en SQLite (`data/txatbot.db`) vía `ConversationRepository` (`adapters/sqlite`, aiosqlite). Esquema versionado con `PRAGMA user_version` en `adapters/sqlite/database.py`: las migraciones solo se añaden al final de `MIGRATIONS`.
 
 - `GET /api/conversations` → `{ conversations: [{ id, title, model, created_at, updated_at }] }`, por actividad reciente.
-- `POST /api/conversations` `{ model? }` → 201 con la conversación (título provisional "Nueva conversación").
+- `POST /api/conversations` `{ model?, personality_id? }` → 201 con la conversación (título provisional "Nueva conversación"). Sin `personality_id`, Mentor CTF. Modelo: el enviado, si no el `default_model` de la personalidad, si no `DEFAULT_MODEL`. Las conversaciones devuelven `personality: { id, name, icon } | null` (snapshot, solo lectura).
 - `GET /api/conversations/{id}` → conversación + `messages: [{ id, role, content, status, created_at }]`.
 - `PATCH /api/conversations/{id}` `{ title }` · `DELETE /api/conversations/{id}` → 204.
-- `POST /api/conversations/{id}/messages` `{ content, model? }` → mismo SSE que `/api/chat`. El servidor guarda el mensaje del usuario, construye el historial desde la base de datos y guarda la respuesta como `done`, `stopped` (el cliente cortó) o `error` (con el texto parcial). El primer mensaje da el título.
+- `POST /api/conversations/{id}/messages` `{ content, model? }` → mismo SSE que `/api/chat`. El servidor guarda el mensaje del usuario, antepone el system prompt compuesto (base + snapshot de la personalidad), construye el historial desde la base de datos y guarda la respuesta como `done`, `stopped` (el cliente cortó) o `error` (con el texto parcial). El primer mensaje da el título.
 - Los turnos con error y las respuestas vacías no se reenvían al modelo.
 
 ## API de chat
