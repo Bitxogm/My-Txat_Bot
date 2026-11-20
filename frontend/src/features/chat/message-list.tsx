@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useRef } from 'react';
+import { ErrorBoundary } from '@/components/error-boundary';
 import { cn } from '@/lib/utils';
 import type { UiMessage } from './use-chat';
 
@@ -11,6 +12,10 @@ const STATUS_NOTE: Partial<Record<UiMessage['status'], string>> = {
 const Markdown = lazy(() =>
   import('./markdown/markdown').then((module) => ({ default: module.Markdown })),
 );
+
+function PlainText({ text }: { text: string }) {
+  return <div className="whitespace-pre-wrap">{text}</div>;
+}
 
 const EMPTY_REPLY_NOTE = 'El modelo no devolvió ninguna respuesta.';
 
@@ -79,11 +84,13 @@ export function MessageList({
                       </span>
                     ) : message.role === 'assistant' ? (
                       // Model output is rendered as Markdown; user text stays literal.
-                      <Suspense
-                        fallback={<div className="whitespace-pre-wrap">{message.content}</div>}
-                      >
-                        <Markdown content={message.content} />
-                      </Suspense>
+                      // If the renderer throws (pathological nesting, chunk failed to load), this
+                      // message falls back to plain text instead of blanking the whole app.
+                      <ErrorBoundary fallback={<PlainText text={message.content} />}>
+                        <Suspense fallback={<PlainText text={message.content} />}>
+                          <Markdown content={message.content} />
+                        </Suspense>
+                      </ErrorBoundary>
                     ) : (
                       message.content
                     )}
