@@ -1,6 +1,11 @@
+import json
+
 import httpx
+import pytest
 
 from app.adapters.ollama.provider import OllamaProvider
+from app.core.errors import ModelNotFoundError, ModelUnavailableError
+from app.domain.chat import ChatMessage, ModelInfo
 
 
 def provider_with(handler: httpx.MockTransport) -> OllamaProvider:
@@ -28,3 +33,91 @@ async def test_unavailable_when_unreachable() -> None:
     provider = provider_with(httpx.MockTransport(refuse))
 
     assert await provider.is_available() is False
+
+
+def ndjson(*objs: object) -> bytes:
+    return b"".join(json.dumps(o).encode() + b"\n" for o in objs)
+
+
+async def collect(provider: OllamaProvider) -> list[str]:
+    return [c async for c in provider.stream_chat("m", [ChatMessage(role="user", content="hola")])]
+
+
+async def test_list_models_maps_tags() -> None:
+    tags = {
+        "models": [
+            {
+                "name": "llama3.1:8b",
+                "size": 4920753328,
+                "details": {
+                    "family": "llama",
+                    "parameter_size": "8.0B",
+                    "quantization_level": "Q4_K_M",
+                },
+            }
+        ]
+    }
+    provider = provider_with(httpx.MockTransport(lambda _: httpx.Response(200, json=tags)))
+
+    assert await provider.list_models() == [
+        ModelInfo(
+            name="llama3.1:8b",
+            size_bytes=4920753328,
+            family="llama",
+            parameter_size="8.0B",
+            quantization="Q4_K_M",
+        )
+    ]
+
+
+async def test_list_models_unreachable() -> None:
+    def refuse(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("refused", request=request)
+
+    with pytest.raises(ModelUnavailableError):
+        await provider_with(httpx.MockTransport(refuse)).list_models()
+
+
+async def test_stream_chat_yields_content_until_done() -> None:
+    seen: list[dict[str, object]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content))
+        body = ndjson(
+            {"message": {"role": "assistant", "content": "Ho"}, "done": False},
+            {"message": {"role": "assistant", "content": "la"}, "done": False},
+            {"message": {"role": "assistant", "content": ""}, "done": True},
+        )
+        return httpx.Response(200, content=body)
+
+    assert await collect(provider_with(httpx.MockTransport(handler))) == ["Ho", "la"]
+    assert seen[0] == {
+        "model": "m",
+        "messages": [{"role": "user", "content": "hola"}],
+        "stream": True,
+    }
+
+
+async def test_stream_chat_unknown_model() -> None:
+    provider = provider_with(
+        httpx.MockTransport(lambda _: httpx.Response(404, json={"error": "model not found"}))
+    )
+
+    with pytest.raises(ModelNotFoundError):
+        await collect(provider)
+
+
+async def test_stream_chat_error_line() -> None:
+    body = ndjson({"message": {"content": "a"}, "done": False}, {"error": "out of memory"})
+    provider = provider_with(httpx.MockTransport(lambda _: httpx.Response(200, content=body)))
+
+    with pytest.raises(ModelUnavailableError):
+        await collect(provider)
+
+
+async def test_stream_chat_unreachable() -> None:
+    def refuse(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("refused", request=request)
+
+    with pytest.raises(ModelUnavailableError):
+        await collect(provider_with(httpx.MockTransport(refuse)))

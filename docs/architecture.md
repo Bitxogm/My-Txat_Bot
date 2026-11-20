@@ -38,6 +38,17 @@ backend/app/
 - El modelo no está acoplado: `LLMProvider` define el contrato y `OllamaProvider` lo implementa.
 - Acceso a datos con repository pattern.
 
+## API de chat
+
+- `GET /api/models`: modelos disponibles en Ollama (`name`, `size_bytes`, `family`, `parameter_size`, `quantization`) y `default_model`.
+- `POST /api/chat` con `{ "model"?: string, "messages": [{ "role": "system"|"user"|"assistant", "content": string }] }`. Si no se indica `model` se usa `DEFAULT_MODEL`.
+- Respuesta `text/event-stream`:
+  - `event: token` / `data: {"content": "..."}` por cada fragmento.
+  - `event: done` / `data: {"model": "..."}` al terminar.
+  - `event: error` / `data: {code, message, request_id}` si falla con el stream ya empezado.
+- Los fallos antes del primer token (modelo inexistente → 404 `MODEL_NOT_FOUND`, Ollama caído → 503 `MODEL_UNAVAILABLE`) devuelven el JSON de error normal.
+- Si el cliente corta la conexión, el backend cierra la petición a Ollama.
+
 ## Frontend (estructura prevista)
 
 ```

@@ -30,10 +30,22 @@ class NotFoundError(AppError):
     message = "Recurso no encontrado"
 
 
+class BadRequestError(AppError):
+    status_code = HTTPStatus.BAD_REQUEST
+    code = "BAD_REQUEST"
+    message = "Petición no válida"
+
+
 class ModelUnavailableError(AppError):
     status_code = HTTPStatus.SERVICE_UNAVAILABLE
     code = "MODEL_UNAVAILABLE"
     message = "El servidor de modelos no está disponible"
+
+
+class ModelNotFoundError(AppError):
+    status_code = HTTPStatus.NOT_FOUND
+    code = "MODEL_NOT_FOUND"
+    message = "El modelo no existe en el servidor de modelos"
 
 
 _HTTP_STATUS_CODES: dict[int, str] = {

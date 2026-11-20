@@ -13,6 +13,7 @@ class Settings(BaseSettings):
 
     ollama_base_url: str = "http://localhost:11434"
     ollama_timeout_seconds: float = Field(default=2.0, gt=0)
+    ollama_chat_read_timeout_seconds: float = Field(default=300.0, gt=0)
     default_model: str = ""
 
     database_url: str = "sqlite:///./data/txatbot.db"
