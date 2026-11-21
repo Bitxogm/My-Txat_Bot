@@ -33,7 +33,7 @@ IMAGE_MAX_SIDE = 1568
 IMAGE_NORMALIZE_TIMEOUT_SECONDS = 20.0
 # Images sent to the model per request (the newest ones): each costs hundreds of tokens and
 # seconds of GPU time on every turn.
-MAX_IMAGES_PER_REQUEST = 4
+MAX_IMAGES_PER_REQUEST = 2
 
 # Magic numbers of the image formats accepted, and the MIME type each one implies.
 _IMAGE_SIGNATURES = (
@@ -198,10 +198,17 @@ def clip(text: str, limit: int) -> tuple[str, bool]:
 _TAG = re.compile(r"<(\s*/?\s*fichero)", re.IGNORECASE)
 
 
-def format_attachments_for_model(attachments: list[Attachment], user_text: str) -> str:
+def format_attachments_for_model(
+    attachments: list[Attachment],
+    user_text: str,
+    max_chars_per_file: int = ATTACHMENT_PROMPT_MAX_CHARS,
+) -> str:
     """The user's message as the model sees it: each file as a delimited DATA block, then the
     user's own text. The closing tag is escaped inside the file text so a file can't end its own
-    block early (or open a fake one) and pose as user instructions."""
+    block early (or open a fake one) and pose as user instructions.
+
+    `max_chars_per_file` cuts each file's text to fit the context (domain/context.py); with 0
+    the content is left out and only the file's name remains (an old turn, already answered)."""
     if not attachments:
         return user_text
     blocks = [
@@ -214,7 +221,13 @@ def format_attachments_for_model(attachments: list[Attachment], user_text: str) 
             # The pixels travel apart, as an image; here only its (sanitized) name.
             blocks.append(f'<fichero nombre="{attachment.filename}" tipo="imagen"/>')
             continue
-        text, cut = clip(clean_text(attachment.text), ATTACHMENT_PROMPT_MAX_CHARS)
+        if max_chars_per_file <= 0:
+            blocks.append(
+                f'<fichero nombre="{attachment.filename}" tipo="{attachment.kind}"'
+                ' contenido="omitido por espacio"/>'
+            )
+            continue
+        text, cut = clip(clean_text(attachment.text), max_chars_per_file)
         truncated = cut or attachment.truncated
         body = _TAG.sub(lambda m: "<\\" + m.group(1), text)
         blocks.append(

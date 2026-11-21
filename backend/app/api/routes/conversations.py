@@ -15,6 +15,7 @@ from app.api.dependencies import (
     get_osint_source_repository,
     get_personality_repository,
 )
+from app.api.generation import context_for
 from app.api.routes.chat import MAX_CONTENT_CHARS
 from app.api.routes.personalities import PERSONALITY_ID_PATTERN
 from app.api.streaming import stream_reply
@@ -30,9 +31,9 @@ from app.domain.attachment import (
     MAX_ATTACHMENTS_PER_MESSAGE,
     MAX_IMAGES_PER_REQUEST,
     Attachment,
-    format_attachments_for_model,
 )
-from app.domain.chat import ChatMessage, ImageData, Role
+from app.domain.chat import ImageData, Role
+from app.domain.context import Turn, fit_history
 from app.domain.conversation import (
     TITLE_MAX_CHARS,
     Conversation,
@@ -302,21 +303,9 @@ async def send_message(
 
     previous = await repo.messages(conversation_id)
     is_first_message = not any(m.role == "user" for m in previous)
-    user_message = await repo.add_message(conversation_id, "user", body.content, "done")
-    # The checks above and this update are separate steps: a concurrent send may have taken a
-    # file in between. Only the update decides; on a shortfall the turn is undone.
-    linked = await attachments.attach_to_message(conversation_id, requested, user_message.id)
-    if linked != len(requested):
-        await attachments.release(user_message.id)
-        await repo.delete_message(conversation_id, user_message.id)
-        raise BadRequestError("Ese fichero ya se envió en otro mensaje")
-    await repo.update(
-        conversation_id,
-        model=model,
-        title=title_from_message(body.content) if is_first_message else None,
-    )
-
     snapshot = conversation.personality
+    budget, params = context_for(model, snapshot.params, settings)
+
     # The system prompt is composed on every turn (never stored as a message): the base layer
     # comes from code, so a fix to it also reaches older conversations; the personality layer
     # is the conversation's own snapshot.
@@ -326,7 +315,7 @@ async def send_message(
     if needs_osint_catalog(snapshot.id):
         reference = format_osint_catalog(await osint_sources.list_all(active_only=True))
     system_prompt = compose_system_prompt(snapshot.system_prompt, reference)
-    history = [ChatMessage(role="system", content=system_prompt)]
+
     # File contents go inside the user's message as delimited DATA, never in the system prompt.
     by_message = _by_message(await attachments.list_for_conversation(conversation_id))
     earlier = [m for m in previous if m.status != "error" and m.content.strip()]
@@ -352,27 +341,38 @@ async def send_message(
                 logger.warning("Image attachment file missing")
         return tuple(loaded)
 
+    turns: list[Turn] = []
     for m in earlier:
-        if m.role == "user":
-            files = by_message.get(m.id, [])
-            history.append(
-                ChatMessage(
-                    role="user",
-                    content=format_attachments_for_model(files, m.content),
-                    images=await images_of(files),
-                )
-            )
-        else:
-            history.append(ChatMessage(role=m.role, content=m.content))
-    history.append(
-        ChatMessage(
-            role="user",
-            content=format_attachments_for_model(sending, body.content),
-            images=await images_of(sending),
+        files = by_message.get(m.id, []) if m.role == "user" else []
+        turns.append(Turn(role=m.role, text=m.content, files=files, images=await images_of(files)))
+    current = Turn(role="user", text=body.content, files=sending, images=await images_of(sending))
+    # Shaped to the model's window BEFORE anything is stored: a message that can't fit is
+    # refused (400 CONTEXT_TOO_LONG) instead of failing at the model.
+    fitted = fit_history(system_prompt, turns, current, budget)
+    if fitted.dropped_turns or fitted.dropped_images or fitted.omitted_files:
+        logger.info(
+            "History fitted to %d tokens: %d turns dropped, %d images and %d files left out",
+            budget,
+            fitted.dropped_turns,
+            fitted.dropped_images,
+            fitted.omitted_files,
         )
+
+    user_message = await repo.add_message(conversation_id, "user", body.content, "done")
+    # The checks above and this update are separate steps: a concurrent send may have taken a
+    # file in between. Only the update decides; on a shortfall the turn is undone.
+    linked = await attachments.attach_to_message(conversation_id, requested, user_message.id)
+    if linked != len(requested):
+        await attachments.release(user_message.id)
+        await repo.delete_message(conversation_id, user_message.id)
+        raise BadRequestError("Ese fichero ya se envió en otro mensaje")
+    await repo.update(
+        conversation_id,
+        model=model,
+        title=title_from_message(body.content) if is_first_message else None,
     )
 
     async def save_reply(content: str, status: MessageStatus) -> None:
         await repo.add_message(conversation_id, "assistant", content, status)
 
-    return await stream_reply(llm, model, history, on_finish=save_reply, params=snapshot.params)
+    return await stream_reply(llm, model, fitted.messages, on_finish=save_reply, params=params)
