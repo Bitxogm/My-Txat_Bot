@@ -4,6 +4,7 @@ export type ApiErrorKind =
   | 'forbidden'
   | 'not_found'
   | 'payload_too_large'
+  | 'unsupported_media_type'
   | 'rate_limited'
   | 'server'
   | 'network';
@@ -38,6 +39,8 @@ export function kindFromStatus(status: number): ApiErrorKind {
   if (status === 403) return 'forbidden';
   if (status === 404) return 'not_found';
   if (status === 413) return 'payload_too_large';
+  if (status === 415) return 'unsupported_media_type';
+  if (status === 411) return 'validation';
   if (status === 429) return 'rate_limited';
   return 'server';
 }
@@ -48,6 +51,7 @@ const FALLBACK_MESSAGES: Record<ApiErrorKind, string> = {
   forbidden: 'No tienes permiso para hacer esto.',
   not_found: 'No se ha encontrado el recurso.',
   payload_too_large: 'El fichero es demasiado grande.',
+  unsupported_media_type: 'Tipo de fichero no admitido.',
   rate_limited: 'Demasiadas peticiones. Espera un momento.',
   server: 'Error del servidor. Inténtalo de nuevo.',
   network: 'No se puede conectar con el servidor.',

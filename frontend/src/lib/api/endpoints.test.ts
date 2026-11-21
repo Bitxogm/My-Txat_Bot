@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { deleteConversation, renameConversation, sendMessage, streamChat } from './endpoints';
+import {
+  deleteAttachment,
+  deleteConversation,
+  renameConversation,
+  sendMessage,
+  streamChat,
+  uploadAttachment,
+} from './endpoints';
 import { ApiError } from './errors';
 import { jsonResponse, mockFetch, streamResponse } from './test-utils';
 
@@ -99,5 +106,31 @@ describe('conversation endpoints', () => {
     expect(fetchMock.mock.calls[0][1]?.method).toBe('DELETE');
     expect(fetchMock.mock.calls[1][1]?.method).toBe('PATCH');
     expect(fetchMock.mock.calls[1][1]?.body).toBe('{"title":"T"}');
+  });
+});
+
+describe('attachment endpoints', () => {
+  it('uploads the file as multipart without forcing a Content-Type', async () => {
+    const fetchMock = mockFetch(jsonResponse(201, { id: 'a' }));
+    const file = new File(['hola'], 'notas.txt', { type: 'text/plain' });
+
+    await uploadAttachment('c/1', file);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/conversations/c%2F1/attachments');
+    expect(init?.method).toBe('POST');
+    expect(init?.body).toBeInstanceOf(FormData);
+    expect((init?.body as FormData).get('file')).toBeInstanceOf(File);
+    // The browser adds multipart/form-data with its boundary.
+    expect(new Headers(init?.headers).get('Content-Type')).toBeNull();
+  });
+
+  it('deletes a pending attachment', async () => {
+    const fetchMock = mockFetch(new Response(null, { status: 204 }));
+
+    await deleteAttachment('c1', 'a1');
+
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/conversations/c1/attachments/a1');
+    expect(fetchMock.mock.calls[0][1]?.method).toBe('DELETE');
   });
 });

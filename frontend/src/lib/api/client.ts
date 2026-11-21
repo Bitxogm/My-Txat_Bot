@@ -71,14 +71,16 @@ export function networkError(): ApiError {
 export async function send(path: string, options: RequestOptions = {}): Promise<Response> {
   const { method = 'GET', body, signal, accept = 'application/json' } = options;
   const headers: Record<string, string> = { Accept: accept };
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  // FormData (uploads): the browser sets the multipart Content-Type with its boundary.
+  const isForm = body instanceof FormData;
+  if (body !== undefined && !isForm) headers['Content-Type'] = 'application/json';
 
   let response: Response;
   try {
     response = await fetch(`${API_BASE}${path}`, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
       credentials: 'same-origin',
       signal,
     });
