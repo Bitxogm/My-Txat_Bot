@@ -5,7 +5,7 @@ import type { UiMessage } from './use-chat';
 
 let nextId = 0;
 function assistant(content: string, status: UiMessage['status']): UiMessage {
-  return { id: `a${nextId++}`, role: 'assistant', content, status };
+  return { id: `a${nextId++}`, role: 'assistant', content, status, attachments: [] };
 }
 
 vi.mock('./markdown/markdown', async (importOriginal) => {
