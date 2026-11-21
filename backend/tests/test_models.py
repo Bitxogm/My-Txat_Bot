@@ -28,6 +28,7 @@ async def test_lists_models(client: httpx.AsyncClient, fake_llm: FakeLLMProvider
                 "parameter_size": "7.6B",
                 "quantization": "Q4_K_M",
                 "remote": False,
+                "vision": False,
             }
         ],
         "default_model": None,

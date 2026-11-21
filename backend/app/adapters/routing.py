@@ -50,6 +50,12 @@ class RoutingLLMProvider:
             raise errors[0]
         return models
 
+    async def supports_vision(self, model: str) -> bool:
+        prefix, sep, rest = model.partition("/")
+        if sep and prefix in self._remotes:
+            return await self._remotes[prefix].supports_vision(rest)
+        return await self._local.supports_vision(model)
+
     def stream_chat(
         self,
         model: str,

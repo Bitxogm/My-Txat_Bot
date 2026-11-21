@@ -22,18 +22,30 @@ Cada fase se divide en tareas pequeñas. Una tarea = una rama = una PR.
 ## Fase 2: Personalidad y ficheros (actual)
 - [x] Personalidades editables (system prompt + parámetros)
 - [x] Catálogo de fuentes OSINT para el Auditor de Huella Digital (ADR-014)
-- [ ] Subida de imágenes (modelos con visión) y ficheros de texto/PDF
+- [x] Ficheros adjuntos de texto y PDF (ADR-015)
+- [ ] Imágenes para modelos con visión (ADR-016): backend hecho, falta el frontend
 - [ ] PWA (instalable, offline shell)
 
-## Fase 3: Conocimiento
-- [ ] RAG con ChromaDB: HackTricks, man pages, notas propias
+## Fase 3: Personalización (memoria y valoraciones)
+Objetivo: un modelo que "aprende" de Void con el uso. Orden acordado: memoria → conocimiento → entrenamiento.
+- [ ] Memoria persistente: datos sobre el usuario, su entorno y preferencias que se inyectan en cada conversación. El modelo propone recuerdos y el usuario los aprueba, edita o borra (nada se guarda sin visto bueno)
+- [ ] Valoraciones 👍/👎 y corrección de respuestas en el chat
+- [ ] Exportación del dataset (respuestas buenas y corregidas) para el fine-tuning
+
+## Fase 4: Conocimiento
+- [ ] RAG con ChromaDB: HackTricks, man pages, writeups y notas propias
+- [ ] Indexar conversaciones marcadas como útiles
 - [ ] Búsqueda web con SearXNG (servicio propio en Compose)
 
-## Fase 4: Asistente Kali
+## Fase 5: Asistente Kali
 - [ ] Sugerencia de comandos con explicación
 - [ ] Ejecución solo tras confirmación explícita, en entorno aislado, con registro
 
-## Fase 5: Extras
+## Fase 6: Modelo propio (fine-tuning)
+Cuando haya unos cientos de ejemplos valorados.
+- [ ] QLoRA con Unsloth en el host de la RTX 3060 (modelo base 7-8B)
+- [ ] Importación a Ollama como modelo propio versionado (`txat-void:vN`), comparable con el original y reversible
+
+## Fase 7: Extras
 - [ ] Voz: faster-whisper (STT) + Piper (TTS)
-- [ ] Memoria a largo plazo
 - [ ] Backups automáticos de `data/`

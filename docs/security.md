@@ -45,9 +45,10 @@
 
 ## Ficheros subidos
 - Límite de tamaño (`UPLOAD_MAX_MB`): `Content-Length` obligatorio (sin él, 411) y comprobado antes de leer; además se corta al leer por trozos. nginx admite 21 MB por el sobre multipart. Un fichero por petición, máximo 5 pendientes por conversación.
-- Tipo por contenido, no por el MIME del cliente: PDF (`%PDF-`) o texto UTF-8 con extensión de la lista blanca. Imágenes, ejecutables, comprimidos y binarios → 415.
+- Tipo por contenido, no por el MIME del cliente: PDF (`%PDF-`), imagen PNG/JPEG/GIF/WebP (magic number) o texto UTF-8 con extensión de la lista blanca. Ejecutables, comprimidos y otros binarios → 415.
 - Se guardan en `UPLOAD_DIR` con nombre uuid generado en el servidor (permisos 600, sin seguir enlaces), nunca con la ruta que manda el cliente. El nombre original se sanea (sin rutas, caracteres invisibles, bidi, comillas ni `<>`) y solo se muestra.
-- PDF con pypdf en un proceso aparte (uno a la vez, 1 GB de memoria máx.) que se mata a los 20 s; máximo 50 páginas; cifrados o dañados → 422.
+- PDF (pypdf) e imágenes (Pillow) se procesan en un proceso aparte (uno a la vez, 1 GB de memoria máx.) que se mata a los 20 s. PDF: máximo 50 páginas; cifrados o dañados → 422. Imágenes: más de 40 MP o rotas → 422; se recodifican sin metadatos (EXIF/GPS) y nunca se guarda ni se reenvía el fichero original.
+- Las imágenes solo se vuelven a servir (miniaturas) ya recodificadas, con tipo fijo, `nosniff` y CSP `sandbox`. El texto que se vea en una imagen puede llevar instrucciones: solo lo frenan el aviso de datos y la capa base.
 - Al texto se le quitan los caracteres invisibles y de control (incluidas las etiquetas Unicode U+E0000, usadas para esconder órdenes) y se normaliza con NFKC.
 - El contenido llega al modelo como datos delimitados en el mensaje del usuario; un fichero no puede cerrar su propio bloque. Sigue siendo una barrera de prompt: un fichero ajeno puede llevar instrucciones escondidas.
 - Los ficheros se borran del disco al borrar su conversación; los huérfanos, al arrancar. Carpeta 700, ficheros 600.

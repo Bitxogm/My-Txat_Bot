@@ -32,6 +32,7 @@ class FakeLLMProvider:
         self.fail_after: AppError | None = None
         self.calls: list[tuple[str, list[ChatMessage]]] = []
         self.params: list[GenerationParams | None] = []
+        self.vision_models: set[str] = set()
 
     async def is_available(self) -> bool:
         return self.available
@@ -40,6 +41,9 @@ class FakeLLMProvider:
         if self.fail_before:
             raise self.fail_before
         return self.models
+
+    async def supports_vision(self, model: str) -> bool:
+        return model in self.vision_models
 
     async def stream_chat(
         self,

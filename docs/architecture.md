@@ -77,21 +77,22 @@ Requieren sesión. Persisten en SQLite (`data/txatbot.db`) vía `ConversationRep
 - `POST /api/conversations/{id}/messages` `{ content, model?, attachment_ids? }` → mismo SSE que `/api/chat`. El servidor guarda el mensaje del usuario, antepone el system prompt compuesto (base + snapshot de la personalidad), construye el historial desde la base de datos y guarda la respuesta como `done`, `stopped` (el cliente cortó) o `error` (con el texto parcial). El primer mensaje da el título.
 - Los turnos con error y las respuestas vacías no se reenvían al modelo.
 
-## Ficheros adjuntos (ADR-015)
+## Ficheros adjuntos (ADR-015, ADR-016)
 
 Requieren sesión. Tabla `attachments` (migración v4); el fichero en `UPLOAD_DIR` (`data/uploads/`) con nombre uuid.
 
-- `POST /api/conversations/{id}/attachments` (multipart, campo `file`) → 201 `{ id, filename, mime, kind: "text"|"pdf", size_bytes, truncated, sent, created_at }`. Errores: 411 `LENGTH_REQUIRED` (sin `Content-Length`), 413 `PAYLOAD_TOO_LARGE` (> `UPLOAD_MAX_MB`), 415 `UNSUPPORTED_MEDIA_TYPE`, 422 `UNREADABLE_FILE` (vacío, PDF cifrado, dañado o sin texto), 400 si ya hay 5 pendientes.
+- `POST /api/conversations/{id}/attachments` (multipart, campo `file`) → 201 `{ id, filename, mime, kind: "text"|"pdf"|"image", size_bytes, truncated, sent, created_at }`. Errores: 411 `LENGTH_REQUIRED` (sin `Content-Length`), 413 `PAYLOAD_TOO_LARGE` (> `UPLOAD_MAX_MB`), 415 `UNSUPPORTED_MEDIA_TYPE`, 422 `UNREADABLE_FILE` (vacío, PDF cifrado, dañado o sin texto, imagen rota o de más de 40 MP), 400 si ya hay 5 pendientes.
 - `GET /api/conversations/{id}/attachments` → `{ attachments: [...] }` · `DELETE …/attachments/{attachment_id}` → 204, solo pendientes.
 - Envío: `POST /api/conversations/{id}/messages` acepta `attachment_ids` (máx. 5, pendientes de esa conversación; otro → 404 `ATTACHMENT_NOT_FOUND`, ya enviado → 400). Cada mensaje del detalle lleva `attachments: [{ id, filename, kind, size_bytes, truncated }]`.
 - El texto de los ficheros va al modelo dentro del mensaje del usuario como bloques `<fichero>` de datos, también en los turnos siguientes del historial.
+- Imágenes: se guardan recodificadas (≤1568 px, sin metadatos) y van al modelo como imágenes, solo si tiene visión (si no, 400 `MODEL_WITHOUT_VISION`) y solo las 4 más recientes de la conversación. `GET …/attachments/{attachment_id}/content` devuelve la imagen (solo imágenes) para las miniaturas.
 - Frontend: el clip del compositor sube cada fichero al momento (en un chat nuevo crea antes la conversación) y lo muestra como chip; el envío espera a que terminen las subidas. Al abrir una conversación vuelven al compositor sus adjuntos pendientes. Con un modelo en la nube se avisa de que el contenido sale de la red.
 
 ## API de chat
 
 Requiere sesión (401 sin cookie válida). `/api/chat` es la variante sin estado (el cliente manda todo el historial y no se guarda nada).
 
-- `GET /api/models`: modelos de Ollama y, si hay `CLOUD_API_KEY`, los del proveedor en la nube (`name`, `size_bytes`, `family`, `parameter_size`, `quantization`, `remote`) y `default_model`. Si un proveedor falla, se devuelven los del otro.
+- `GET /api/models`: modelos de Ollama y, si hay `CLOUD_API_KEY`, los del proveedor en la nube (`name`, `size_bytes`, `family`, `parameter_size`, `quantization`, `remote`, `vision`) y `default_model`. Si un proveedor falla, se devuelven los del otro.
 - `POST /api/chat` con `{ "model"?: string, "messages": [{ "role": "system"|"user"|"assistant", "content": string }] }`. Si no se indica `model` se usa `DEFAULT_MODEL`.
 - Respuesta `text/event-stream`:
   - `event: token` / `data: {"content": "..."}` por cada fragmento.

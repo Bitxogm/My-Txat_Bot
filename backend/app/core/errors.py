@@ -74,9 +74,15 @@ class UnsupportedMediaTypeError(AppError):
     status_code = HTTPStatus.UNSUPPORTED_MEDIA_TYPE
     code = "UNSUPPORTED_MEDIA_TYPE"
     message = (
-        "Tipo de fichero no admitido. Se aceptan PDF y ficheros de texto (txt, md, log, csv,"
-        " json, código…). Las imágenes llegarán más adelante."
+        "Tipo de fichero no admitido. Se aceptan PDF, imágenes (PNG, JPEG, WebP, GIF) y"
+        " ficheros de texto (txt, md, log, csv, json, código…)."
     )
+
+
+class ModelWithoutVisionError(AppError):
+    status_code = HTTPStatus.BAD_REQUEST
+    code = "MODEL_WITHOUT_VISION"
+    message = "Este modelo no admite imágenes. Elige uno con visión o quita las imágenes."
 
 
 class PayloadTooLargeError(AppError):

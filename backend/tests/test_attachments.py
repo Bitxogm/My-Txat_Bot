@@ -19,8 +19,6 @@ from app.domain.attachment import (
 from tests.conftest import FakeLLMProvider, make_settings
 from tests.pdf_fixtures import encrypted_pdf, text_pdf
 
-PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
-
 
 def code(response: httpx.Response) -> str:
     return str(response.json()["error"]["code"])
@@ -92,8 +90,7 @@ async def test_uploads_a_pdf_and_extracts_its_text(
 @pytest.mark.parametrize(
     ("name", "data"),
     [
-        ("foto.png", PNG),  # images: later step
-        ("foto.txt", PNG),  # an image renamed to .txt is still not text
+        ("foto.bmp", b"BM" + b"\x00" * 64),  # images only as PNG, JPEG, WebP or GIF
         ("programa.exe", b"MZ\x90\x00" + b"\x00" * 64),
         ("script.exe", b"echo hola\n"),  # text content, but not an allowed extension
         ("nul.txt", b"hola\x00mundo"),

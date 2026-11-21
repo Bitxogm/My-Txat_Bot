@@ -37,6 +37,10 @@ class LocalFileStorage:
         with os.fdopen(fd, "wb") as handle:
             handle.write(data)
 
+    async def read(self, key: str) -> bytes:
+        path = self._path(key)
+        return await asyncio.to_thread(path.read_bytes)
+
     async def delete(self, key: str) -> None:
         path = self._path(key)
         await asyncio.to_thread(path.unlink, missing_ok=True)

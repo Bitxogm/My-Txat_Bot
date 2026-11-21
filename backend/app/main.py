@@ -68,6 +68,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     cloud_client,
                     settings.cloud_name,
                     allowed_models=settings.cloud_model_list,
+                    vision_models=settings.cloud_vision_model_list,
                     chat_timeout=build_chat_timeout(
                         settings.cloud_timeout_seconds, settings.ollama_chat_read_timeout_seconds
                     ),

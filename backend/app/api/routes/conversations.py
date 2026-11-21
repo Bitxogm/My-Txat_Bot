@@ -23,14 +23,16 @@ from app.core.errors import (
     AttachmentNotFoundError,
     BadRequestError,
     ConversationNotFoundError,
+    ModelWithoutVisionError,
     PersonalityNotFoundError,
 )
 from app.domain.attachment import (
     MAX_ATTACHMENTS_PER_MESSAGE,
+    MAX_IMAGES_PER_REQUEST,
     Attachment,
     format_attachments_for_model,
 )
-from app.domain.chat import ChatMessage, Role
+from app.domain.chat import ChatMessage, ImageData, Role
 from app.domain.conversation import (
     TITLE_MAX_CHARS,
     Conversation,
@@ -272,6 +274,7 @@ async def send_message(
     llm: Annotated[LLMProvider, Depends(get_llm_provider)],
     osint_sources: Annotated[OsintSourceRepository, Depends(get_osint_source_repository)],
     attachments: Attachments,
+    storage: Annotated[FileStorage, Depends(get_file_storage)],
     settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> StreamingResponse:
     """Save the user message, stream the reply (same SSE events as /api/chat) and save it.
@@ -292,6 +295,10 @@ async def send_message(
         if attachment.message_id is not None:
             raise BadRequestError("Ese fichero ya se envió en otro mensaje")
         sending.append(attachment)
+
+    vision = await llm.supports_vision(model)
+    if not vision and any(a.kind == "image" for a in sending):
+        raise ModelWithoutVisionError
 
     previous = await repo.messages(conversation_id)
     is_first_message = not any(m.role == "user" for m in previous)
@@ -322,18 +329,47 @@ async def send_message(
     history = [ChatMessage(role="system", content=system_prompt)]
     # File contents go inside the user's message as delimited DATA, never in the system prompt.
     by_message = _by_message(await attachments.list_for_conversation(conversation_id))
-    history += [
-        ChatMessage(
-            role=m.role,
-            content=format_attachments_for_model(by_message.get(m.id, []), m.content)
-            if m.role == "user"
-            else m.content,
-        )
-        for m in previous
-        if m.status != "error" and m.content.strip()
-    ]
+    earlier = [m for m in previous if m.status != "error" and m.content.strip()]
+    # Images travel as images, only to a vision model, and only the newest few (each costs
+    # hundreds of tokens and GPU time on every turn); older ones keep just their name.
+    images = [
+        a
+        for m in earlier
+        if m.role == "user"
+        for a in by_message.get(m.id, [])
+        if a.kind == "image"
+    ] + [a for a in sending if a.kind == "image"]
+    chosen = {a.id for a in images[-MAX_IMAGES_PER_REQUEST:]} if vision else set()
+
+    async def images_of(files: list[Attachment]) -> tuple[ImageData, ...]:
+        loaded: list[ImageData] = []
+        for a in files:
+            if a.id not in chosen:
+                continue
+            try:
+                loaded.append(ImageData(mime=a.mime, data=await storage.read(a.storage_key)))
+            except (FileNotFoundError, ValueError):
+                logger.warning("Image attachment file missing")
+        return tuple(loaded)
+
+    for m in earlier:
+        if m.role == "user":
+            files = by_message.get(m.id, [])
+            history.append(
+                ChatMessage(
+                    role="user",
+                    content=format_attachments_for_model(files, m.content),
+                    images=await images_of(files),
+                )
+            )
+        else:
+            history.append(ChatMessage(role=m.role, content=m.content))
     history.append(
-        ChatMessage(role="user", content=format_attachments_for_model(sending, body.content))
+        ChatMessage(
+            role="user",
+            content=format_attachments_for_model(sending, body.content),
+            images=await images_of(sending),
+        )
     )
 
     async def save_reply(content: str, status: MessageStatus) -> None:
