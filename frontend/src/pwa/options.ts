@@ -17,6 +17,8 @@ export const pwaOptions: Partial<VitePWAOptions> = {
   // Registered from React (virtual:pwa-register/react): the inline script mode is blocked by
   // the CSP (script-src 'self').
   injectRegister: false,
+  // The icons already match globPatterns; listing them again would precache them twice.
+  includeManifestIcons: false,
   manifest: {
     name: 'Txat_bot',
     short_name: 'Txat',

@@ -48,6 +48,7 @@ export function useAuth(): UseAuth {
         if (statusRef.current === 'authenticated' && !loggingOutRef.current) {
           toast.info('Tu sesión ha caducado. Vuelve a iniciar sesión.');
         }
+        void clearRuntimeCaches();
         setState({ status: 'anonymous' });
       }),
     [],
