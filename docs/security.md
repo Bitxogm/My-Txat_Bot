@@ -53,6 +53,18 @@
 - El contenido llega al modelo como datos delimitados en el mensaje del usuario; un fichero no puede cerrar su propio bloque. Sigue siendo una barrera de prompt: un fichero ajeno puede llevar instrucciones escondidas.
 - Los ficheros se borran del disco al borrar su conversación; los huérfanos, al arrancar. Carpeta 700, ficheros 600.
 
+## PWA (ADR-017)
+- El service worker solo precachea el shell estático (HTML, JS, CSS, fuentes, iconos). **Nunca maneja `/api`**: no hay ninguna ruta de `runtimeCaching` y `/api/` está fuera del `navigateFallback`. Conversaciones, adjuntos, miniaturas y sesión siempre vienen de la red.
+- La API responde `Cache-Control: no-store` por defecto (middleware), también las miniaturas y el SSE: nada de la sesión queda en la caché HTTP del navegador. El logout añade `Clear-Site-Data: "cache"`, que solo actúa con HTTPS. Al cerrar sesión o caducar, el frontend borra cualquier caché que no sea el precache del shell.
+- Sin servidor no se muestran datos viejos: la app enseña "Sin conexión con el servidor". Ese estado no da acceso a nada; el chat solo aparece tras un `/api/auth/me` correcto.
+- Actualizaciones: `sw.js` y el manifest se sirven con `no-cache`; la app busca versión nueva cada hora y pide permiso antes de recargar.
+- Desinstalar un service worker defectuoso: publicar un build con `selfDestroying: true` en las opciones de `VitePWA` (`frontend/src/pwa/options.ts`) y volver a desplegar.
+- **Requiere HTTPS**: por `http://IP` (LAN o Tailscale) el navegador no registra el service worker y no se puede instalar. La app sigue funcionando como web normal. Despliegue con HTTPS:
+  1. `tailscale serve` hacia el puerto del frontend. **Nunca `tailscale funnel`**, que lo publica en internet.
+  2. `COOKIE_SECURE=true` en `backend/.env`.
+  3. HSTS en `frontend/nginx-security-headers.conf`, solo en ese despliegue, empezando con un `max-age` corto y sin `includeSubDomains`.
+- El certificado de Tailscale aparece en los registros públicos de Certificate Transparency: el nombre de la máquina y del tailnet se vuelven públicos (no la app). Usar un nombre de máquina neutro y no escribirlo en el repo.
+
 ## Contenedores
 El proceso que parsea PDF e imágenes comparte usuario y sistema de ficheros con el backend, así que el contenedor es la siguiente barrera (`docker-compose.yml`):
 - `backend` y `frontend` corren sin root, con `cap_drop: [ALL]` y `no-new-privileges` (un binario setuid no da privilegios).

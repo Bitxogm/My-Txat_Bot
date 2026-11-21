@@ -111,3 +111,13 @@ Registro corto de decisiones de arquitectura. Formato: contexto, decisión, cons
   - `CLOUD_MODELS` es una lista blanca también para chatear y para la visión: un modelo fuera de ella da 404 aunque el cliente lo pida por nombre.
 - **Consecuencias**: el texto que aparece en una imagen puede llevar instrucciones y no se puede limpiar como el de un fichero; solo queda el aviso y la capa base (ADR-013). Los modelos pequeños leen bien capturas limpias, pero se equivocan con texto fino: para salidas largas, mejor adjuntar el texto. Con modelos en la nube, la imagen sale de la red (ADR-012); al cambiar a uno remoto con visión se envían también las imágenes recientes de turnos anteriores. El proceso aislado limita memoria y tiempo, pero no es un sandbox de seguridad: mismo usuario y mismos ficheros que el backend.
 
+## ADR-017: PWA con service worker que no toca la API
+- **Contexto**: instalar la app en el móvil y el portátil como una aplicación más, sin que el service worker guarde ni sirva datos de la sesión (conversaciones, adjuntos, cookies) y sin romper el streaming SSE ni las subidas.
+- **Decisión**:
+  - `vite-plugin-pwa` con `generateSW`: precache solo del shell estático. **Ninguna ruta de `runtimeCaching`**: `/api` no pasa por el service worker (ni siquiera con NetworkOnly, que interceptaría y reenviaría el SSE y las subidas). `/api/` queda fuera del `navigateFallback`.
+  - `registerType: 'prompt'`: una versión nueva espera a que el usuario pulse "Recargar"; nunca se recarga a mitad de una respuesta. Se busca versión nueva cada hora porque una app instalada casi nunca se cierra.
+  - Registro desde React (`injectRegister: false`): el modo inline lo bloquea la CSP.
+  - Sin servidor, pantalla "Sin conexión con el servidor" en lugar de datos viejos.
+  - Defensa en profundidad: la API responde `Cache-Control: no-store`, el logout envía `Clear-Site-Data: "cache"` y el frontend borra cualquier caché que no sea el precache del shell al cerrar sesión o caducar.
+- **Consecuencias**: no hay uso offline real (sin servidor no hay chat, a propósito). El service worker solo funciona en contexto seguro: hace falta `tailscale serve` con HTTPS y `COOKIE_SECURE=true`; por `http://IP` la app funciona pero no se instala. Para retirar un service worker defectuoso se publica un build con `selfDestroying: true`.
+

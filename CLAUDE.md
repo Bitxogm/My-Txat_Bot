@@ -3,7 +3,7 @@
 Chatbot personal 100 % local sobre Ollama, con personalidad configurable y orientado a ayudar en labs/CTF autorizados. App de navegador (PWA), totalmente dockerizada.
 
 ## Fase actual
-**Fase 2 (personalidad y ficheros)**: hechos personalidades (ADR-013), catálogo OSINT (ADR-014) y adjuntos de texto, PDF e imágenes (ADR-015, ADR-016); falta la PWA. Fases 0 y 1 cerradas. Siguientes: Personalización (memoria y valoraciones), Conocimiento (RAG), Kali y modelo propio. Detalle en `docs/roadmap.md`. Actualiza esta línea al cambiar de fase.
+**Fase 3 (personalización)**: memoria persistente aprobada por el usuario, valoraciones 👍/👎 y exportación del dataset para el fine-tuning. Fases 0-2 cerradas (chat, login, conversaciones, personalidades, catálogo OSINT, adjuntos de texto/PDF/imágenes y PWA). Después: Conocimiento (RAG), Kali y modelo propio. Detalle en `docs/roadmap.md`. Actualiza esta línea al cambiar de fase.
 
 ## Stack
 - **Backend**: Python 3.12, FastAPI (async), pydantic-settings, Ruff, pytest. SQLite (aiosqlite); ChromaDB solo con RAG. pypdf y Pillow para adjuntos, siempre en el proceso aislado.
@@ -100,6 +100,7 @@ Claude hace ramas, commits, push y PRs sin pedir permiso. Void revisa y mergea; 
 - Repo **público**: nunca commitear `.env`, bases de datos, uploads, modelos, IPs, nombres de host Tailscale reales ni datos personales. Solo `.env.example` con valores vacíos.
 - Acceso solo LAN + Tailscale. Puertos publicados en `BIND_ADDR`, nunca `0.0.0.0` por defecto. Sin cambios en el router ni túneles públicos.
 - Ollama no tiene auth: jamás exponerlo fuera de Tailscale/localhost.
+- PWA (ADR-017): el service worker nunca maneja `/api` (sin `runtimeCaching`, `/api` fuera del `navigateFallback`). Solo funciona con HTTPS (`tailscale serve`, nunca `funnel`). La API responde `Cache-Control: no-store` por defecto.
 - Login de un usuario: hash argon2/bcrypt, cookie `httpOnly` + `SameSite=Strict`, nada en `localStorage`.
 - Asistente Kali: sugiere comandos, **nunca ejecuta sin confirmación explícita**. Uso solo en entornos propios o autorizados.
 - Ficheros subidos: límite de tamaño, tipo por contenido (no por el MIME del cliente), nombre generado en el servidor. PDF e imágenes se parsean solo en el proceso aislado (`adapters/files/isolated.py`); las imágenes se recodifican sin metadatos. Su contenido va al modelo como datos en el mensaje del usuario, nunca en el system prompt.

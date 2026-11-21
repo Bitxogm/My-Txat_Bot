@@ -145,6 +145,11 @@ frontend/src/
 - `streamChat` lee el SSE con `fetch` + `ReadableStream`; un evento `error` o un corte sin `done` también lanzan `ApiError`. Las cancelaciones (`AbortSignal`) se relanzan tal cual (`isAbortError`).
 - `notifyError(error)` (`src/lib/notify-error.ts`) muestra el toast; ignora cancelaciones.
 
+**PWA (ADR-017)**
+- `vite-plugin-pwa` (`frontend/src/pwa/options.ts`): `generateSW`, precache del shell y nada más; `/api` nunca pasa por el service worker.
+- Registro desde React (`virtual:pwa-register/react`, sin script inline por la CSP) en `src/pwa/pwa-updater.tsx`: aviso "Nueva versión disponible · Recargar" y búsqueda de versión nueva cada hora.
+- `useAuth` distingue `offline` (error de red o 5xx en `/api/auth/me`): pantalla "Sin conexión con el servidor", reintento manual y automático al volver la red.
+
 **Docker**
 - Rotación de logs `json-file` (10 MB x 3) en todos los servicios.
 - Healthcheck en el backend contra `/api/health`.
