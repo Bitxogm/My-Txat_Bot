@@ -8,6 +8,10 @@ class FileStorage(Protocol):
         """Store the bytes and return the new key."""
         ...
 
+    async def read(self, key: str) -> bytes:
+        """The stored bytes. Raises FileNotFoundError if the file is gone."""
+        ...
+
     async def delete(self, key: str) -> None:
         """Remove the file; a missing file is not an error."""
         ...
