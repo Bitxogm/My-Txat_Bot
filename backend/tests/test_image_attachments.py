@@ -166,7 +166,7 @@ async def test_content_is_served_safely_and_only_for_images(client: httpx.AsyncC
     assert served.headers["content-type"] == "image/png"
     assert served.headers["x-content-type-options"] == "nosniff"
     assert "sandbox" in served.headers["content-security-policy"]
-    assert served.headers["cache-control"] == "private, no-cache"
+    assert served.headers["cache-control"] == "private, no-store"
     assert (await content(client, conversation_id, text["id"])).status_code == 404
     assert (await content(client, other, image["id"])).status_code == 404
 

@@ -47,6 +47,9 @@ async def logout(
     settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> None:
     auth.logout()
+    # Empties the browser's HTTP cache for this origin (only over HTTPS; not "storage", which
+    # would also drop the PWA's service worker and the theme preference).
+    response.headers["Clear-Site-Data"] = '"cache"'
     response.delete_cookie(
         SESSION_COOKIE,
         path=SESSION_COOKIE_PATH,

@@ -245,9 +245,9 @@ _IMAGE_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "Content-Security-Policy": "default-src 'none'; sandbox",
     "Content-Disposition": "inline",
-    # Revalidated on every use: after a logout or a deleted conversation the browser must not
-    # keep showing it from its cache.
-    "Cache-Control": "private, no-cache",
+    # Never stored: after a logout or a deleted conversation no copy may stay in the browser's
+    # cache (re-downloading a thumbnail on the LAN is cheap).
+    "Cache-Control": "private, no-store",
     "Cross-Origin-Resource-Policy": "same-origin",
 }
 
