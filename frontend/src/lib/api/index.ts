@@ -4,6 +4,7 @@ export {
   createConversation,
   createOsintSource,
   createPersonality,
+  deleteAttachment,
   deleteConversation,
   deleteOsintSource,
   deletePersonality,
@@ -11,6 +12,7 @@ export {
   getConversation,
   getHealth,
   getMe,
+  listAttachments,
   listConversations,
   listModels,
   listOsintSources,
@@ -23,6 +25,7 @@ export {
   streamChat,
   toggleOsintSource,
   updatePersonality,
+  uploadAttachment,
 } from './endpoints';
 export type { StreamChatOptions } from './endpoints';
 export { ApiError, isAbortError } from './errors';

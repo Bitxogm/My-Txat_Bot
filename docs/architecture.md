@@ -85,6 +85,7 @@ Requieren sesión. Tabla `attachments` (migración v4); el fichero en `UPLOAD_DI
 - `GET /api/conversations/{id}/attachments` → `{ attachments: [...] }` · `DELETE …/attachments/{attachment_id}` → 204, solo pendientes.
 - Envío: `POST /api/conversations/{id}/messages` acepta `attachment_ids` (máx. 5, pendientes de esa conversación; otro → 404 `ATTACHMENT_NOT_FOUND`, ya enviado → 400). Cada mensaje del detalle lleva `attachments: [{ id, filename, kind, size_bytes, truncated }]`.
 - El texto de los ficheros va al modelo dentro del mensaje del usuario como bloques `<fichero>` de datos, también en los turnos siguientes del historial.
+- Frontend: el clip del compositor sube cada fichero al momento (en un chat nuevo crea antes la conversación) y lo muestra como chip; el envío espera a que terminen las subidas. Al abrir una conversación vuelven al compositor sus adjuntos pendientes. Con un modelo en la nube se avisa de que el contenido sale de la red.
 
 ## API de chat
 
@@ -130,6 +131,7 @@ frontend/src/
   - 403 → sin permiso
   - 404 → no encontrado
   - 413 → fichero demasiado grande
+  - 415 → tipo de fichero no admitido
   - 429 → demasiadas peticiones
   - 5xx / red → error genérico + toast (Sonner) con el `request_id`
 - 401 dispara el handler registrado con `setUnauthorizedHandler` (redirección a login).

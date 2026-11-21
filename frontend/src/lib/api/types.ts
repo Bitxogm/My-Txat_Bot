@@ -70,12 +70,36 @@ export interface ConversationList {
   conversations: Conversation[];
 }
 
+export type AttachmentKind = 'text' | 'pdf';
+
+/** A file as listed on a stored message. */
+export interface MessageAttachment {
+  id: string;
+  filename: string;
+  kind: AttachmentKind;
+  size_bytes: number;
+  /** Only part of its text reached the model. */
+  truncated: boolean;
+}
+
+/** A file uploaded to a conversation; `sent: false` until a message carries it. */
+export interface Attachment extends MessageAttachment {
+  mime: string;
+  sent: boolean;
+  created_at: string;
+}
+
+export interface AttachmentList {
+  attachments: Attachment[];
+}
+
 export interface StoredMessage {
   id: number;
   role: ChatRole;
   content: string;
   status: MessageStatus;
   created_at: string;
+  attachments: MessageAttachment[];
 }
 
 export interface ConversationDetail extends Conversation {

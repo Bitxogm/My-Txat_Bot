@@ -2,6 +2,8 @@ import { networkError, request, send } from './client';
 import { ApiError, fallbackMessage, isAbortError } from './errors';
 import { readSse } from './sse';
 import type {
+  Attachment,
+  AttachmentList,
   ChatRequest,
   ChatResult,
   Conversation,
@@ -139,7 +141,7 @@ export async function deleteConversation(id: string): Promise<void> {
 /** Persistent chat: the server stores the turn and builds the history. Same events as streamChat. */
 export function sendMessage(
   id: string,
-  body: { content: string; model?: string },
+  body: { content: string; model?: string; attachment_ids?: string[] },
   options: StreamChatOptions,
 ): Promise<ChatResult> {
   return streamReply(
@@ -148,6 +150,39 @@ export function sendMessage(
     body.model ?? '',
     options,
   );
+}
+
+function attachmentsPath(conversationId: string): string {
+  return `/conversations/${encodeURIComponent(conversationId)}/attachments`;
+}
+
+/** Uploads one file to a conversation; it stays pending until a message sends it. */
+export function uploadAttachment(
+  conversationId: string,
+  file: File,
+  signal?: AbortSignal,
+): Promise<Attachment> {
+  const form = new FormData();
+  form.append('file', file, file.name);
+  return request<Attachment>(attachmentsPath(conversationId), {
+    method: 'POST',
+    body: form,
+    signal,
+  });
+}
+
+export function listAttachments(
+  conversationId: string,
+  signal?: AbortSignal,
+): Promise<AttachmentList> {
+  return request<AttachmentList>(attachmentsPath(conversationId), { signal });
+}
+
+/** Removes a file not sent yet. */
+export async function deleteAttachment(conversationId: string, id: string): Promise<void> {
+  await send(`${attachmentsPath(conversationId)}/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
 }
 
 export function listPersonalities(signal?: AbortSignal): Promise<PersonalityList> {

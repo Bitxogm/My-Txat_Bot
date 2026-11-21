@@ -1,15 +1,20 @@
+import { StrictMode } from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
   createConversation,
+  deleteAttachment,
   deleteConversation,
   getConversation,
+  listAttachments,
   listConversations,
   listModels,
   listPersonalities,
   sendMessage,
+  uploadAttachment,
+  type Attachment,
   type Conversation,
   type ModelsResponse,
   type Personality,
@@ -28,6 +33,9 @@ vi.mock('@/lib/api', async (importOriginal) => ({
   getConversation: vi.fn(),
   deleteConversation: vi.fn(),
   sendMessage: vi.fn(),
+  listAttachments: vi.fn(),
+  uploadAttachment: vi.fn(),
+  deleteAttachment: vi.fn(),
 }));
 vi.mock('@/lib/notify-error', () => ({ notifyError: vi.fn() }));
 
@@ -111,6 +119,7 @@ beforeEach(() => {
   vi.mocked(listPersonalities).mockResolvedValue({ personalities: PERSONALITIES });
   vi.mocked(listConversations).mockResolvedValue({ conversations: [OLD] });
   vi.mocked(createConversation).mockResolvedValue(conversation('n'.repeat(32), 'Nueva', 'b:8b'));
+  vi.mocked(listAttachments).mockResolvedValue({ attachments: [] });
 });
 
 afterEach(() => {
@@ -154,12 +163,20 @@ describe('ChatPage', () => {
     vi.mocked(getConversation).mockResolvedValue({
       ...OLD,
       messages: [
-        { id: 1, role: 'user', content: 'pregunta', status: 'done', created_at: OLD.created_at },
+        {
+          id: 1,
+          role: 'user',
+          content: 'pregunta',
+          status: 'done',
+          created_at: OLD.created_at,
+          attachments: [],
+        },
         {
           id: 2,
           role: 'assistant',
           content: 'a medias',
           status: 'stopped',
+          attachments: [],
           created_at: OLD.created_at,
         },
       ],
@@ -348,5 +365,173 @@ describe('ChatPage settings navigation', () => {
     await user.click(screen.getByRole('button', { name: 'Fuentes OSINT' }));
 
     expect(await screen.findByRole('heading', { name: 'Fuentes OSINT' })).toBeInTheDocument();
+  });
+});
+
+describe('ChatPage attachments', () => {
+  function uploaded(id: string, filename: string, extra: Partial<Attachment> = {}): Attachment {
+    return {
+      id,
+      filename,
+      kind: 'text',
+      mime: 'text/plain',
+      size_bytes: 2048,
+      truncated: false,
+      sent: false,
+      created_at: OLD.created_at,
+      ...extra,
+    };
+  }
+
+  function textFile(name: string): File {
+    return new File(['22/tcp open ssh'], name, { type: 'text/plain' });
+  }
+
+  it('creates the conversation on the first file, uploads it and sends its id', async () => {
+    vi.mocked(uploadAttachment).mockResolvedValue(uploaded('f'.repeat(32), 'scan.nmap'));
+    vi.mocked(sendMessage).mockResolvedValue({ model: 'b:8b', content: 'ok' });
+    const { user } = await renderReady();
+
+    await user.upload(screen.getByTestId('file-input'), textFile('scan.nmap'));
+
+    const chips = await screen.findByRole('list', { name: 'Ficheros adjuntos' });
+    expect(await within(chips).findByText('2 KB')).toBeInTheDocument();
+    expect(createConversation).toHaveBeenCalledWith({
+      model: 'b:8b',
+      personality_id: 'builtin-mentor-ctf',
+    });
+    expect(uploadAttachment).toHaveBeenCalledWith(
+      'n'.repeat(32),
+      expect.any(File),
+      expect.any(AbortSignal),
+    );
+
+    await user.type(messageBox(), 'analiza{Enter}');
+
+    await waitFor(() =>
+      expect(sendMessage).toHaveBeenCalledWith(
+        'n'.repeat(32),
+        { content: 'analiza', model: 'b:8b', attachment_ids: ['f'.repeat(32)] },
+        expect.anything(),
+      ),
+    );
+    const sent = await screen.findByRole('list', { name: 'Ficheros enviados' });
+    expect(within(sent).getByText('scan.nmap')).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Ficheros adjuntos' })).not.toBeInTheDocument();
+  });
+
+  it('uploads under StrictMode (mount, unmount, mount)', async () => {
+    vi.mocked(uploadAttachment).mockResolvedValue(uploaded('9'.repeat(32), 'a.txt'));
+    const user = userEvent.setup();
+    render(
+      <StrictMode>
+        <ChatPage username="void" onLogout={vi.fn()} />
+      </StrictMode>,
+    );
+    const select = await screen.findByRole('combobox', { name: 'Modelo' });
+    await waitFor(() => expect(select).toBeEnabled());
+
+    await user.upload(screen.getByTestId('file-input'), textFile('a.txt'));
+
+    expect(await screen.findByRole('button', { name: 'Quitar a.txt' })).toBeInTheDocument();
+    expect(vi.mocked(uploadAttachment).mock.calls[0][2]?.aborted).toBe(false);
+  });
+
+  it('does not send while a file is still uploading', async () => {
+    let finish: (value: Attachment) => void = () => {};
+    vi.mocked(uploadAttachment).mockImplementation(
+      () => new Promise((resolve) => (finish = resolve)),
+    );
+    const { user } = await renderReady();
+
+    await user.upload(screen.getByTestId('file-input'), textFile('log.txt'));
+    await user.type(messageBox(), 'hola');
+
+    expect(await screen.findByText('subiendo…')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Enviar' })).toBeDisabled();
+
+    finish(uploaded('a'.repeat(32), 'log.txt'));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Enviar' })).toBeEnabled());
+  });
+
+  it('drops a rejected file and shows the server message', async () => {
+    const error = new ApiError({
+      kind: 'unsupported_media_type',
+      status: 415,
+      code: 'UNSUPPORTED_MEDIA_TYPE',
+      message: 'Tipo de fichero no admitido.',
+      requestId: 'r1',
+    });
+    vi.mocked(uploadAttachment).mockRejectedValue(error);
+    const { user } = await renderReady();
+
+    await user.upload(screen.getByTestId('file-input'), textFile('notas.txt'));
+
+    await waitFor(() => expect(notifyError).toHaveBeenCalledWith(error));
+    expect(screen.queryByRole('list', { name: 'Ficheros adjuntos' })).not.toBeInTheDocument();
+  });
+
+  it('removes a pending file on the server', async () => {
+    vi.mocked(uploadAttachment).mockResolvedValue(uploaded('b'.repeat(32), 'a.md'));
+    vi.mocked(deleteAttachment).mockResolvedValue();
+    const { user } = await renderReady();
+    await user.upload(screen.getByTestId('file-input'), textFile('a.md'));
+
+    await user.click(await screen.findByRole('button', { name: 'Quitar a.md' }));
+
+    expect(deleteAttachment).toHaveBeenCalledWith('n'.repeat(32), 'b'.repeat(32));
+    expect(screen.queryByRole('list', { name: 'Ficheros adjuntos' })).not.toBeInTheDocument();
+  });
+
+  it('restores unsent files and shows sent ones when opening a conversation', async () => {
+    vi.mocked(getConversation).mockResolvedValue({
+      ...OLD,
+      messages: [
+        {
+          id: 1,
+          role: 'user',
+          content: 'mira',
+          status: 'done',
+          created_at: OLD.created_at,
+          attachments: [
+            {
+              id: 'c'.repeat(32),
+              filename: 'big.log',
+              kind: 'text',
+              size_bytes: 9,
+              truncated: true,
+            },
+          ],
+        },
+      ],
+    });
+    vi.mocked(listAttachments).mockResolvedValue({
+      attachments: [
+        uploaded('c'.repeat(32), 'big.log', { sent: true }),
+        uploaded('d'.repeat(32), 'pendiente.pdf', { kind: 'pdf' }),
+      ],
+    });
+    const { user } = await renderReady();
+
+    await user.click(await screen.findByRole('button', { name: 'Notas de un CTF' }));
+
+    const sent = await screen.findByRole('list', { name: 'Ficheros enviados' });
+    expect(within(sent).getByText('9 B · recortado')).toBeInTheDocument();
+    const pending = await screen.findByRole('list', { name: 'Ficheros adjuntos' });
+    expect(within(pending).getByText('pendiente.pdf')).toBeInTheDocument();
+    expect(within(pending).queryByText('big.log')).not.toBeInTheDocument();
+  });
+
+  it('warns that files leave the network with a cloud model', async () => {
+    vi.mocked(listModels).mockResolvedValue({
+      models: [{ ...MODELS.models[0], name: 'groq/llama', remote: true }],
+      default_model: 'groq/llama',
+    });
+    vi.mocked(uploadAttachment).mockResolvedValue(uploaded('e'.repeat(32), 'a.txt'));
+    const { user } = await renderReady();
+
+    await user.upload(screen.getByTestId('file-input'), textFile('a.txt'));
+
+    expect(await screen.findByText(/saldrá de tu red/)).toBeInTheDocument();
   });
 });

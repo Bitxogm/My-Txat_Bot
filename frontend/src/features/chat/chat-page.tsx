@@ -17,6 +17,7 @@ import {
 } from '@/features/personalities/use-personalities';
 import type { Personality } from '@/lib/api';
 import { Composer } from './composer';
+import { useAttachments } from './use-attachments';
 import { MessageList } from './message-list';
 import { ModelSelect } from './model-select';
 import { useChat } from './use-chat';
@@ -32,6 +33,7 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
   const conversations = useConversations();
   const chat = useChat({ onActivity: conversations.refresh });
   const personalities = usePersonalities();
+  const attachments = useAttachments();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [page, setPage] = useState<SettingsPage | null>(null);
   const [personalityId, setPersonalityId] = useState(DEFAULT_PERSONALITY_ID);
@@ -53,6 +55,8 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
     setSidebarOpen(false);
     setPage(null);
     const detail = await chat.open(id);
+    // Files uploaded earlier and never sent come back to the composer.
+    void attachments.load(detail ? id : null);
     if (detail && models.some((m) => m.name === detail.model)) select(detail.model);
   }
 
@@ -60,13 +64,37 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
     setSidebarOpen(false);
     setPage(null);
     setPersonalityId(DEFAULT_PERSONALITY_ID);
+    attachments.clear();
     chat.startNew();
   }
 
   async function deleteConversation(id: string) {
-    if (id === chat.conversationId) chat.startNew();
+    if (id === chat.conversationId) {
+      attachments.clear();
+      chat.startNew();
+    }
     await conversations.remove(id);
   }
+
+  async function attach(files: File[]) {
+    // Files belong to a conversation: a new chat is created on the first attachment.
+    const id = await chat.ensureConversation(selected, personalityId);
+    if (id) await attachments.add(id, files);
+  }
+
+  function removeFile(key: string) {
+    if (chat.conversationId) void attachments.remove(chat.conversationId, key);
+  }
+
+  async function sendWithFiles(content: string) {
+    const files = attachments.ready;
+    if (files.length > 0) attachments.clear();
+    const id = await chat.send(content, selected, personalityId, files);
+    // Resync: whatever the server did not take (e.g. the send failed) shows up again.
+    if (files.length > 0) void attachments.load(id);
+  }
+
+  const isRemoteModel = models.some((m) => m.name === selected && m.remote);
 
   // A brand-new chat (nothing sent yet) shows the personality picker instead of messages.
   const isNewChat =
@@ -164,10 +192,19 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
               <MessageList messages={chat.messages} loading={chat.isLoading} />
             )}
             <Composer
-              onSend={(content) => void chat.send(content, selected, personalityId)}
+              onSend={(content) => void sendWithFiles(content)}
               onStop={chat.stop}
               isStreaming={chat.isStreaming}
               disabled={!selected || chat.isLoading}
+              files={attachments.files}
+              isUploading={attachments.isUploading}
+              onAttach={(files) => void attach(files)}
+              onRemoveFile={removeFile}
+              filesNote={
+                isRemoteModel
+                  ? 'Modelo en la nube: el contenido de estos ficheros saldrá de tu red.'
+                  : null
+              }
             />
           </>
         )}

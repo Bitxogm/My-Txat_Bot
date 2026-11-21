@@ -45,6 +45,8 @@ describe('request', () => {
     [403, 'forbidden'],
     [404, 'not_found'],
     [413, 'payload_too_large'],
+    [415, 'unsupported_media_type'],
+    [411, 'validation'],
     [429, 'rate_limited'],
     [500, 'server'],
     [503, 'server'],

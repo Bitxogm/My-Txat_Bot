@@ -54,7 +54,7 @@ Dependencias Python con uv (`uv add`), siempre con `uv.lock` commiteado.
 - FastAPI: handler global para `HTTPException`, validación y excepciones no controladas. Nunca se devuelve una traza al cliente.
 - Middleware de `request_id` (respeta `X-Request-ID`), presente en logs y cabecera de respuesta.
 - `GET /api/health`: estado del backend y de Ollama. Lo usa el healthcheck de Docker.
-- Frontend: el cliente API mapea 400/422, 401 (a login), 403, 404, 413, 429 y 5xx/red a errores tipados; los errores genéricos salen en un toast de Sonner con el `request_id`.
+- Frontend: el cliente API mapea 400/422, 401 (a login), 403, 404, 413, 415, 429 y 5xx/red a errores tipados; los errores genéricos salen en un toast de Sonner con el `request_id`.
 - Docker: log rotation `json-file` 10 MB x 3 en todos los servicios (anchor `x-logging`).
 
 ## Flujo de trabajo
