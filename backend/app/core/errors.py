@@ -70,6 +70,39 @@ class OsintSourceLimitError(AppError):
     message = "Has llegado al máximo de fuentes propias. Borra o reutiliza alguna."
 
 
+class UnsupportedMediaTypeError(AppError):
+    status_code = HTTPStatus.UNSUPPORTED_MEDIA_TYPE
+    code = "UNSUPPORTED_MEDIA_TYPE"
+    message = (
+        "Tipo de fichero no admitido. Se aceptan PDF y ficheros de texto (txt, md, log, csv,"
+        " json, código…). Las imágenes llegarán más adelante."
+    )
+
+
+class PayloadTooLargeError(AppError):
+    status_code = HTTPStatus.REQUEST_ENTITY_TOO_LARGE
+    code = "PAYLOAD_TOO_LARGE"
+    message = "El fichero supera el tamaño máximo permitido"
+
+
+class LengthRequiredError(AppError):
+    status_code = HTTPStatus.LENGTH_REQUIRED
+    code = "LENGTH_REQUIRED"
+    message = "La subida debe indicar su tamaño (Content-Length)"
+
+
+class UnreadableFileError(AppError):
+    status_code = HTTPStatus.UNPROCESSABLE_ENTITY
+    code = "UNREADABLE_FILE"
+    message = "No se ha podido leer el fichero"
+
+
+class AttachmentNotFoundError(AppError):
+    status_code = HTTPStatus.NOT_FOUND
+    code = "ATTACHMENT_NOT_FOUND"
+    message = "El adjunto no existe en esta conversación"
+
+
 class BadRequestError(AppError):
     status_code = HTTPStatus.BAD_REQUEST
     code = "BAD_REQUEST"
