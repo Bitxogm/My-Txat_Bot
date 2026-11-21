@@ -126,3 +126,48 @@ def test_report() -> None:
     assert "1/2 superan las comprobaciones automáticas" in text
     assert "| 11 | Mentor CTF | REVISIÓN MANUAL | Debe decir que no la conoce. |" in text
     assert "MODEL_UNAVAILABLE" in text and "razonamiento off" in text
+
+
+class RateLimitedThenOk(FakeLLMProvider):
+    def __init__(self, failures: int, retry_after: str | None) -> None:
+        super().__init__()
+        self.failures = failures
+        self.retry_after = retry_after
+        self.chunks = [SPANISH]
+
+    def stream_chat(self, model, messages, params=None):  # type: ignore[no-untyped-def]
+        from app.core.errors import ModelRateLimitedError
+
+        if self.failures:
+            self.failures -= 1
+            headers = {"Retry-After": self.retry_after} if self.retry_after else None
+            raise ModelRateLimitedError(headers=headers)
+        return super().stream_chat(model, messages, params)
+
+
+async def test_rate_limits_are_waited_out_not_failed() -> None:
+    llm = RateLimitedThenOk(failures=2, retry_after="7")
+    waits: list[float] = []
+
+    async def sleep(seconds: float) -> None:
+        waits.append(seconds)
+
+    result = await ask(llm, "groq/m", q(), None, make_settings(), sleep=sleep)
+
+    assert result.status == "OK"
+    assert waits == [8.0, 8.0]  # Retry-After plus a second of margin
+
+
+async def test_rate_limit_without_retry_after_backs_off_and_eventually_reports() -> None:
+    from app.evals.runner import RATE_LIMIT_RETRIES
+
+    llm = RateLimitedThenOk(failures=100, retry_after=None)
+    waits: list[float] = []
+
+    async def sleep(seconds: float) -> None:
+        waits.append(seconds)
+
+    result = await ask(llm, "groq/m", q(), None, make_settings(), sleep=sleep)
+
+    assert result.error == "MODEL_RATE_LIMITED"
+    assert len(waits) == RATE_LIMIT_RETRIES - 1 and waits[0] < waits[1]

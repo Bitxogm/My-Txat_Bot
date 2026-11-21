@@ -1,15 +1,17 @@
 """Runs the evaluation battery against models through the same prompt composition and
 LLMProvider adapters as the chat (no direct calls to Ollama or the cloud)."""
 
+import asyncio
 import re
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
 from app.api.generation import context_for
 from app.core.config import Settings
-from app.core.errors import AppError
+from app.core.errors import AppError, ModelRateLimitedError
 from app.domain.builtin_personalities import BUILTIN_PERSONALITIES
 from app.domain.context import Turn, fit_history
 from app.domain.personality import DEFAULT_PERSONALITY_ID, PersonalityFields
@@ -46,25 +48,54 @@ def resolve_personality(name: str | None) -> tuple[str, PersonalityFields]:
     raise ValueError(f"Personalidad desconocida: {name}. Disponibles: {names}")
 
 
+# A provider's rate limit (Groq's free tier: tokens per minute) is not the model's fault: wait
+# and ask again instead of counting it as a failure.
+RATE_LIMIT_RETRIES = 8
+RATE_LIMIT_MAX_WAIT_SECONDS = 90.0
+
+Sleep = Callable[[float], Awaitable[None]]
+
+
+def rate_limit_wait(exc: ModelRateLimitedError, attempt: int) -> float:
+    """Seconds to wait: Retry-After (plus a second) when the provider sends it, else a growing
+    backoff."""
+    try:
+        wait = float(exc.headers.get("Retry-After", ""))
+    except ValueError:
+        wait = 10.0 * attempt
+    return min(max(wait, 1.0) + 1.0, RATE_LIMIT_MAX_WAIT_SECONDS)
+
+
 async def ask(
     llm: LLMProvider,
     model: str,
     question: Question,
     default_personality: str | None,
     settings: Settings,
+    sleep: Sleep = asyncio.sleep,
 ) -> Result:
     _, personality = resolve_personality(question.personality or default_personality)
     system_prompt = compose_system_prompt(personality.system_prompt)
     budget, params = context_for(model, personality.params, settings)
-    started = time.perf_counter()
-    try:
-        fitted = fit_history(system_prompt, [], Turn(role="user", text=question.question), budget)
-        answer = "".join([c async for c in llm.stream_chat(model, fitted.messages, params)])
-    except AppError as exc:
-        return Result(question, personality.name, "", time.perf_counter() - started, [], exc.code)
-    return Result(
-        question, personality.name, answer, time.perf_counter() - started, check(question, answer)
-    )
+    for attempt in range(1, RATE_LIMIT_RETRIES + 1):
+        started = time.perf_counter()
+        try:
+            fitted = fit_history(
+                system_prompt, [], Turn(role="user", text=question.question), budget
+            )
+            answer = "".join([c async for c in llm.stream_chat(model, fitted.messages, params)])
+        except ModelRateLimitedError as exc:
+            if attempt == RATE_LIMIT_RETRIES:
+                return Result(question, personality.name, "", 0.0, [], exc.code)
+            await sleep(rate_limit_wait(exc, attempt))
+            continue
+        except AppError as exc:
+            elapsed = time.perf_counter() - started
+            return Result(question, personality.name, "", elapsed, [], exc.code)
+        # Only the successful attempt is timed: waiting out the rate limit isn't the model's time.
+        elapsed = time.perf_counter() - started
+        return Result(question, personality.name, answer, elapsed, check(question, answer))
+    raise AssertionError("unreachable")
 
 
 def report_path(folder: Path, model: str, think: bool | None, at: datetime) -> Path:
