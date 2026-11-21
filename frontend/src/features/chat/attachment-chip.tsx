@@ -13,6 +13,8 @@ interface AttachmentChipProps {
   uploading?: boolean;
   truncated?: boolean;
   onRemove?: () => void;
+  /** Thumbnail of an image attachment. */
+  previewUrl?: string | null;
   className?: string;
 }
 
@@ -23,6 +25,7 @@ export function AttachmentChip({
   uploading = false,
   truncated = false,
   onRemove,
+  previewUrl = null,
   className,
 }: AttachmentChipProps) {
   const detail = uploading
@@ -40,6 +43,13 @@ export function AttachmentChip({
     >
       {uploading ? (
         <LoaderCircleIcon className="size-3.5 shrink-0 animate-spin" aria-hidden />
+      ) : previewUrl ? (
+        <img
+          src={previewUrl}
+          alt=""
+          className="size-6 shrink-0 rounded-sm object-cover"
+          loading="lazy"
+        />
       ) : (
         <FileTextIcon className="size-3.5 shrink-0" aria-hidden />
       )}

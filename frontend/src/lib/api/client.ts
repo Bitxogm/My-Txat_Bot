@@ -1,6 +1,6 @@
 import { ApiError, fallbackMessage, isAbortError, kindFromStatus } from './errors';
 
-const API_BASE = '/api';
+export const API_BASE = '/api';
 const REQUEST_ID_HEADER = 'X-Request-ID';
 
 type UnauthorizedHandler = (error: ApiError) => void;

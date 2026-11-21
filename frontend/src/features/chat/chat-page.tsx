@@ -94,7 +94,19 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
     if (files.length > 0) void attachments.load(id);
   }
 
-  const isRemoteModel = models.some((m) => m.name === selected && m.remote);
+  const selectedModel = models.find((m) => m.name === selected);
+  const isRemoteModel = selectedModel?.remote ?? false;
+  const hasPendingImages = attachments.files.some((f) => f.attachment?.kind === 'image');
+  const blockReason =
+    hasPendingImages && selectedModel && !selectedModel.vision
+      ? `${selectedModel.name} no ve imágenes. Elige un modelo que las vea o quita las imágenes.`
+      : null;
+  const sentImages = chat.messages.some((m) => m.attachments.some((a) => a.kind === 'image'));
+  // Earlier images are re-sent to a vision model on every turn (the newest few, ADR-016).
+  const notice =
+    isRemoteModel && selectedModel?.vision && sentImages
+      ? 'Modelo en la nube: las imágenes recientes de esta conversación también saldrán de tu red.'
+      : null;
 
   // A brand-new chat (nothing sent yet) shows the personality picker instead of messages.
   const isNewChat =
@@ -189,7 +201,11 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
                 </div>
               </div>
             ) : (
-              <MessageList messages={chat.messages} loading={chat.isLoading} />
+              <MessageList
+                messages={chat.messages}
+                loading={chat.isLoading}
+                conversationId={chat.conversationId}
+              />
             )}
             <Composer
               onSend={(content) => void sendWithFiles(content)}
@@ -205,6 +221,8 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
                   ? 'Modelo en la nube: el contenido de estos ficheros saldrá de tu red.'
                   : null
               }
+              blockReason={blockReason}
+              notice={notice}
             />
           </>
         )}

@@ -1,4 +1,4 @@
-import { networkError, request, send } from './client';
+import { API_BASE, networkError, request, send } from './client';
 import { ApiError, fallbackMessage, isAbortError } from './errors';
 import { readSse } from './sse';
 import type {
@@ -176,6 +176,14 @@ export function listAttachments(
   signal?: AbortSignal,
 ): Promise<AttachmentList> {
   return request<AttachmentList>(attachmentsPath(conversationId), { signal });
+}
+
+/**
+ * Address of an image attachment (re-encoded by the server) for an <img> or a link. Images only;
+ * the browser sends the session cookie because it is same-origin.
+ */
+export function attachmentContentUrl(conversationId: string, id: string): string {
+  return `${API_BASE}${attachmentsPath(conversationId)}/${encodeURIComponent(id)}/content`;
 }
 
 /** Removes a file not sent yet. */
