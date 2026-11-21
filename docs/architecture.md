@@ -74,8 +74,17 @@ Requieren sesión. Persisten en SQLite (`data/txatbot.db`) vía `ConversationRep
 - `POST /api/conversations` `{ model?, personality_id? }` → 201 con la conversación (título provisional "Nueva conversación"). Sin `personality_id`, Mentor CTF. Modelo: el enviado, si no el `default_model` de la personalidad, si no `DEFAULT_MODEL`. Las conversaciones devuelven `personality: { id, name, icon } | null` (snapshot, solo lectura).
 - `GET /api/conversations/{id}` → conversación + `messages: [{ id, role, content, status, created_at }]`.
 - `PATCH /api/conversations/{id}` `{ title }` · `DELETE /api/conversations/{id}` → 204.
-- `POST /api/conversations/{id}/messages` `{ content, model? }` → mismo SSE que `/api/chat`. El servidor guarda el mensaje del usuario, antepone el system prompt compuesto (base + snapshot de la personalidad), construye el historial desde la base de datos y guarda la respuesta como `done`, `stopped` (el cliente cortó) o `error` (con el texto parcial). El primer mensaje da el título.
+- `POST /api/conversations/{id}/messages` `{ content, model?, attachment_ids? }` → mismo SSE que `/api/chat`. El servidor guarda el mensaje del usuario, antepone el system prompt compuesto (base + snapshot de la personalidad), construye el historial desde la base de datos y guarda la respuesta como `done`, `stopped` (el cliente cortó) o `error` (con el texto parcial). El primer mensaje da el título.
 - Los turnos con error y las respuestas vacías no se reenvían al modelo.
+
+## Ficheros adjuntos (ADR-015)
+
+Requieren sesión. Tabla `attachments` (migración v4); el fichero en `UPLOAD_DIR` (`data/uploads/`) con nombre uuid.
+
+- `POST /api/conversations/{id}/attachments` (multipart, campo `file`) → 201 `{ id, filename, mime, kind: "text"|"pdf", size_bytes, truncated, sent, created_at }`. Errores: 411 `LENGTH_REQUIRED` (sin `Content-Length`), 413 `PAYLOAD_TOO_LARGE` (> `UPLOAD_MAX_MB`), 415 `UNSUPPORTED_MEDIA_TYPE`, 422 `UNREADABLE_FILE` (vacío, PDF cifrado, dañado o sin texto), 400 si ya hay 5 pendientes.
+- `GET /api/conversations/{id}/attachments` → `{ attachments: [...] }` · `DELETE …/attachments/{attachment_id}` → 204, solo pendientes.
+- Envío: `POST /api/conversations/{id}/messages` acepta `attachment_ids` (máx. 5, pendientes de esa conversación; otro → 404 `ATTACHMENT_NOT_FOUND`, ya enviado → 400). Cada mensaje del detalle lleva `attachments: [{ id, filename, kind, size_bytes, truncated }]`.
+- El texto de los ficheros va al modelo dentro del mensaje del usuario como bloques `<fichero>` de datos, también en los turnos siguientes del historial.
 
 ## API de chat
 

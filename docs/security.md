@@ -30,7 +30,7 @@
 - Los límites éticos y de alcance están en la capa base (`backend/app/domain/prompts.py`), fija en código. Las personalidades solo añaden tono y método, delimitadas y seguidas de un recordatorio de la base.
 - Es una barrera de prompt, no una garantía técnica: un modelo puede desobedecer, y una personalidad editada a propósito puede intentar anularla. Revisar siempre lo que sugiere el modelo.
 - `/api/chat` no acepta mensajes `system` del cliente. Las personalidades incorporadas no se pueden editar ni borrar (403, también en el repositorio), y el snapshot de una conversación no se puede cambiar por ninguna ruta.
-- Fase 2 (ficheros): el contenido de un fichero irá en un mensaje `user` delimitado como datos, nunca dentro del `system`.
+- Ficheros adjuntos (ADR-015): su contenido va en el mensaje `user` delimitado como datos, nunca dentro del `system`.
 - Catálogo OSINT (ADR-014): sus textos entran en el system prompt del Auditor, así que se validan al guardar (una línea, sin `<>`, backticks ni caracteres de control; URL `http(s)` sin credenciales) y se limpian otra vez al componer el prompt, dentro de un bloque marcado como datos de referencia.
 
 ## Modelos en la nube
@@ -44,8 +44,13 @@
 - Nada de IPs, nombres de host reales de Tailscale ni usuarios en el código o la documentación.
 
 ## Ficheros subidos
-- Límite de tamaño (`UPLOAD_MAX_MB`) y lista blanca de tipos MIME.
-- Se guardan con nombre generado, nunca con la ruta que manda el cliente.
+- Límite de tamaño (`UPLOAD_MAX_MB`): `Content-Length` obligatorio (sin él, 411) y comprobado antes de leer; además se corta al leer por trozos. nginx admite 21 MB por el sobre multipart. Un fichero por petición, máximo 5 pendientes por conversación.
+- Tipo por contenido, no por el MIME del cliente: PDF (`%PDF-`) o texto UTF-8 con extensión de la lista blanca. Imágenes, ejecutables, comprimidos y binarios → 415.
+- Se guardan en `UPLOAD_DIR` con nombre uuid generado en el servidor (permisos 600, sin seguir enlaces), nunca con la ruta que manda el cliente. El nombre original se sanea (sin rutas, caracteres invisibles, bidi, comillas ni `<>`) y solo se muestra.
+- PDF con pypdf en un proceso aparte (uno a la vez, 1 GB de memoria máx.) que se mata a los 20 s; máximo 50 páginas; cifrados o dañados → 422.
+- Al texto se le quitan los caracteres invisibles y de control (incluidas las etiquetas Unicode U+E0000, usadas para esconder órdenes) y se normaliza con NFKC.
+- El contenido llega al modelo como datos delimitados en el mensaje del usuario; un fichero no puede cerrar su propio bloque. Sigue siendo una barrera de prompt: un fichero ajeno puede llevar instrucciones escondidas.
+- Los ficheros se borran del disco al borrar su conversación; los huérfanos, al arrancar. Carpeta 700, ficheros 600.
 
 ## Asistente de Kali
 - El modelo puede sugerir comandos, pero **nunca se ejecuta nada sin confirmación explícita** del usuario.
