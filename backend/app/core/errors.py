@@ -145,6 +145,15 @@ class ModelUnavailableError(AppError):
     message = "El servidor de modelos no está disponible"
 
 
+class ContextTooLongError(AppError):
+    status_code = HTTPStatus.BAD_REQUEST
+    code = "CONTEXT_TOO_LONG"
+    message = (
+        "El mensaje no cabe en el contexto del modelo. Acórtalo, quita algún fichero o imagen,"
+        " o usa una personalidad con más contexto."
+    )
+
+
 class EmptyReplyError(AppError):
     status_code = HTTPStatus.BAD_GATEWAY
     code = "EMPTY_REPLY"

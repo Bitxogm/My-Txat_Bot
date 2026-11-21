@@ -5,10 +5,12 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.api.dependencies import get_app_settings, get_llm_provider
+from app.api.generation import context_for
 from app.api.streaming import stream_reply
 from app.core.config import Settings
 from app.core.errors import BadRequestError
-from app.domain.chat import ChatMessage
+from app.domain.context import Turn, fit_history
+from app.domain.personality import GenerationParams
 from app.domain.prompts import compose_system_prompt
 from app.ports.llm import LLMProvider
 
@@ -47,6 +49,9 @@ async def chat(
     if not model:
         raise BadRequestError("Indica un modelo: no hay DEFAULT_MODEL configurado")
 
-    messages = [ChatMessage(role="system", content=compose_system_prompt(""))]
-    messages += [ChatMessage(role=m.role, content=m.content) for m in body.messages]
-    return await stream_reply(llm, model, messages)
+    budget, params = context_for(model, GenerationParams(), settings)
+    *earlier, last = [Turn(role=m.role, text=m.content) for m in body.messages]
+    if last.role != "user":
+        raise BadRequestError("El último mensaje tiene que ser del usuario")
+    fitted = fit_history(compose_system_prompt(""), earlier, last, budget)
+    return await stream_reply(llm, model, fitted.messages, params=params)

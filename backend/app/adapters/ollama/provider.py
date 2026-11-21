@@ -7,7 +7,12 @@ from typing import Any
 
 import httpx
 
-from app.core.errors import EmptyReplyError, ModelNotFoundError, ModelUnavailableError
+from app.core.errors import (
+    ContextTooLongError,
+    EmptyReplyError,
+    ModelNotFoundError,
+    ModelUnavailableError,
+)
 from app.domain.chat import ChatMessage, ModelInfo
 from app.domain.personality import GenerationParams
 
@@ -111,8 +116,12 @@ class OllamaProvider:
                 if response.status_code != httpx.codes.OK:
                     await response.aread()
                     logger.warning(
-                        "Ollama answered %d on /api/chat: %s", response.status_code, response.text
+                        "Ollama answered %d on /api/chat: %.300s",
+                        response.status_code,
+                        response.text,
                     )
+                    if _is_context_overflow(response.text):
+                        raise ContextTooLongError
                     raise ModelUnavailableError
                 async for line in response.aiter_lines():
                     if not line:
@@ -130,6 +139,11 @@ class OllamaProvider:
                         return
         except httpx.HTTPError as exc:
             raise _unavailable(exc) from exc
+
+
+def _is_context_overflow(body: str) -> bool:
+    lowered = body.lower()
+    return "exceed_context_size" in lowered or "exceeds the available context" in lowered
 
 
 def _ollama_message(message: ChatMessage) -> dict[str, object]:
