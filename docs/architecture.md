@@ -82,6 +82,7 @@ Requieren sesión. Persisten en SQLite (`data/txatbot.db`) vía `ConversationRep
 - `PATCH /api/conversations/{id}` `{ title }` · `DELETE /api/conversations/{id}` → 204.
 - `POST /api/conversations/{id}/messages` `{ content, model?, attachment_ids? }` → mismo SSE que `/api/chat`. El servidor guarda el mensaje del usuario, antepone el system prompt compuesto (base + snapshot de la personalidad), construye el historial desde la base de datos y guarda la respuesta como `done`, `stopped` (el cliente cortó) o `error` (con el texto parcial). El primer mensaje da el título.
 - Los turnos con error y las respuestas vacías no se reenvían al modelo.
+- Ajuste al contexto (ADR-018, `domain/context.py`): antes de guardar nada, el historial se recorta para caber en el contexto del modelo (`num_ctx` de la personalidad, si no `OLLAMA_NUM_CTX`; `CLOUD_CONTEXT_TOKENS` en la nube), dejando sitio para la respuesta. Se conservan los turnos más nuevos; los antiguos pierden primero las imágenes, luego el contenido de sus ficheros y, al final, desaparecen, y el modelo recibe una nota de cuántos se omitieron. Si ni el mensaje nuevo cabe (con sus ficheros recortados) → 400 `CONTEXT_TOO_LONG`, sin guardarlo. `/api/chat` se ajusta igual.
 
 ## Ficheros adjuntos (ADR-015, ADR-016)
 

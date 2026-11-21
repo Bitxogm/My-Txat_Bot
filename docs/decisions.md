@@ -121,3 +121,13 @@ Registro corto de decisiones de arquitectura. Formato: contexto, decisión, cons
   - Defensa en profundidad: la API responde `Cache-Control: no-store`, el logout envía `Clear-Site-Data: "cache"` y el frontend borra cualquier caché que no sea el precache del shell al cerrar sesión o caducar.
 - **Consecuencias**: no hay uso offline real (sin servidor no hay chat, a propósito). El service worker solo funciona en contexto seguro: hace falta `tailscale serve` con HTTPS y `COOKIE_SECURE=true`; por `http://IP` la app funciona pero no se instala. Para retirar un service worker defectuoso se publica un build con `selfDestroying: true`.
 
+## ADR-018: El historial se ajusta al contexto del modelo
+- **Contexto**: con el contexto por defecto de Ollama (4096 tokens), una imagen (~1.500 tokens) y dos o tres respuestas largas desbordaban la ventana: Ollama respondía 400 y la app lo mostraba como "servidor no disponible" (503). La conversación quedaba inutilizable.
+- **Decisión**:
+  - `OLLAMA_NUM_CTX` (8192 por defecto) se manda como `num_ctx` cuando la personalidad no fija uno.
+  - Antes de llamar al modelo y de guardar el mensaje, `fit_history` (`domain/context.py`) estima tokens y recorta: reserva sitio para la respuesta (hasta 2048), mete el mensaje nuevo (recortando sus ficheros si hace falta) y añade el historial del más nuevo al más antiguo. Cada turno antiguo se degrada antes de caer: sin imágenes, luego sin el contenido de sus ficheros (solo el nombre), y si aun así no cabe se descarta con todos los anteriores. El modelo recibe una nota con cuántos mensajes se omitieron.
+  - Solo las 2 imágenes más recientes se reenvían en cada turno (antes 4).
+  - Estimación sin tokenizador: 3 caracteres por token (por encima de lo real en español) e imágenes por su tamaño en teselas de 28 px.
+  - Si aun así el modelo dice que no cabe, el error es `CONTEXT_TOO_LONG` (400) con un mensaje claro, no `MODEL_UNAVAILABLE`.
+- **Consecuencias**: las conversaciones largas nunca se rompen, pero el modelo "olvida" lo más antiguo; la memoria de la Fase 3 servirá para que lo importante no dependa del historial. Subir `OLLAMA_NUM_CTX` da más memoria a costa de VRAM y velocidad.
+
