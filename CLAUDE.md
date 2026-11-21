@@ -3,17 +3,17 @@
 Chatbot personal 100 % local sobre Ollama, con personalidad configurable y orientado a ayudar en labs/CTF autorizados. App de navegador (PWA), totalmente dockerizada.
 
 ## Fase actual
-**Fase 2 (personalidad y ficheros)**: personalidades editables, subida de imágenes/ficheros y PWA. Fases 0 y 1 cerradas (chat con streaming, login, conversaciones en SQLite, todo en Docker). Detalle en `docs/roadmap.md`. Actualiza esta línea al cambiar de fase.
+**Fase 2 (personalidad y ficheros)**: hechos personalidades (ADR-013), catálogo OSINT (ADR-014) y adjuntos de texto, PDF e imágenes (ADR-015, ADR-016); falta la PWA. Fases 0 y 1 cerradas. Siguientes: Personalización (memoria y valoraciones), Conocimiento (RAG), Kali y modelo propio. Detalle en `docs/roadmap.md`. Actualiza esta línea al cambiar de fase.
 
 ## Stack
-- **Backend**: Python 3.12, FastAPI (async), pydantic-settings, Ruff, pytest. SQLite; ChromaDB solo con RAG.
+- **Backend**: Python 3.12, FastAPI (async), pydantic-settings, Ruff, pytest. SQLite (aiosqlite); ChromaDB solo con RAG. pypdf y Pillow para adjuntos, siempre en el proceso aislado.
 - **Frontend**: Vite, React, TypeScript (strict), Tailwind, shadcn/ui, Sonner, vite-plugin-pwa, ESLint, Prettier, Vitest.
 - **Modelos**: Ollama, servicio aparte. El backend lo alcanza por `OLLAMA_BASE_URL` (nombre Tailscale del host, puerto 11434). Opcional: proveedor en la nube compatible con OpenAI (Groq gratuito, `CLOUD_*`, ADR-012).
 - **Infra**: Docker Compose. Perfil `ollama` para levantar Ollama local con GPU NVIDIA.
 
 ## Estructura
-- `backend/app/`: `core/` (config, logging, errores), `api/routes/`, `domain/`, `ports/`, `adapters/` (ollama, sqlite, chroma). Hexagonal ligera + repository pattern.
-- `frontend/src/`: `lib/api/` (cliente único), `components/ui/` (shadcn, generado), `components/`, `features/`, `pages/`.
+- `backend/app/`: `core/` (config, logging, errores), `api/routes/`, `domain/`, `ports/`, `adapters/` (`ollama`, `openai_compat`, `routing.py`, `sqlite`, `files`). Hexagonal ligera + repository pattern.
+- `frontend/src/`: `lib/api/` (cliente único), `components/ui/` (shadcn, generado), `components/`, `features/` (auth, chat, conversations, personalities, osint-sources).
 - `docs/`: `architecture.md`, `roadmap.md`, `decisions.md` (ADR), `security.md`.
 - `data/`: SQLite, uploads y backups. Montado como volumen. Fuera de git.
 
@@ -102,4 +102,5 @@ Claude hace ramas, commits, push y PRs sin pedir permiso. Void revisa y mergea; 
 - Ollama no tiene auth: jamás exponerlo fuera de Tailscale/localhost.
 - Login de un usuario: hash argon2/bcrypt, cookie `httpOnly` + `SameSite=Strict`, nada en `localStorage`.
 - Asistente Kali: sugiere comandos, **nunca ejecuta sin confirmación explícita**. Uso solo en entornos propios o autorizados.
-- Ficheros subidos: límite de tamaño, lista blanca de MIME, nombre generado en el servidor.
+- Ficheros subidos: límite de tamaño, tipo por contenido (no por el MIME del cliente), nombre generado en el servidor. PDF e imágenes se parsean solo en el proceso aislado (`adapters/files/isolated.py`); las imágenes se recodifican sin metadatos. Su contenido va al modelo como datos en el mensaje del usuario, nunca en el system prompt.
+- Contenedores `read_only`, sin capacidades y con `mem_limit` (`docker-compose.yml`): si algo necesita escribir fuera de `/app/data` y `/tmp`, se añade un tmpfs concreto, nunca se quita `read_only`.
