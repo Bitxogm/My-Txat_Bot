@@ -1,10 +1,12 @@
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.adapters.files.local_storage import LocalFileStorage, sweep_orphans
 from app.adapters.ollama.provider import (
     OllamaProvider,
     build_chat_timeout,
@@ -15,12 +17,14 @@ from app.adapters.openai_compat.provider import (
     build_openai_compatible_client,
 )
 from app.adapters.routing import RoutingLLMProvider
+from app.adapters.sqlite.attachments import SqliteAttachmentRepository
 from app.adapters.sqlite.conversations import SqliteConversationRepository
 from app.adapters.sqlite.database import connect, sqlite_path
 from app.adapters.sqlite.osint_sources import SqliteOsintSourceRepository
 from app.adapters.sqlite.personalities import SqlitePersonalityRepository
 from app.api.dependencies import require_session
 from app.api.routes import (
+    attachments,
     auth,
     chat,
     conversations,
@@ -73,6 +77,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.llm_provider = RoutingLLMProvider(ollama, remotes)
         db = await connect(sqlite_path(settings.database_url))
         app.state.conversations = SqliteConversationRepository(db)
+        attachment_repo = SqliteAttachmentRepository(db)
+        app.state.attachments = attachment_repo
+        file_storage = LocalFileStorage(Path(settings.upload_dir))
+        app.state.file_storage = file_storage
+        try:
+            orphans = await sweep_orphans(file_storage, set(await attachment_repo.storage_keys()))
+            if orphans:
+                logger.info("Removed %d orphan upload file(s)", orphans)
+        except OSError as exc:
+            logger.warning("Could not sweep the upload folder: %s", type(exc).__name__)
         personality_repo = SqlitePersonalityRepository(db)
         await personality_repo.seed_builtins(BUILTIN_PERSONALITIES)
         app.state.personalities = personality_repo
@@ -123,6 +137,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(models.router, prefix="/api", dependencies=protected)
     app.include_router(chat.router, prefix="/api", dependencies=protected)
     app.include_router(conversations.router, prefix="/api", dependencies=protected)
+    app.include_router(attachments.router, prefix="/api", dependencies=protected)
     app.include_router(personalities.router, prefix="/api", dependencies=protected)
     app.include_router(osint_sources.router, prefix="/api", dependencies=protected)
     return app
