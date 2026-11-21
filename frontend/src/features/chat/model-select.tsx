@@ -24,7 +24,8 @@ const GROUPS = [
 
 function describe(model: ModelInfo): string {
   const details = [model.parameter_size, model.quantization].filter(Boolean).join(' · ');
-  return details ? `${model.name} (${details})` : model.name;
+  const name = details ? `${model.name} (${details})` : model.name;
+  return model.vision ? `${name} · ve imágenes` : name;
 }
 
 export function ModelSelect({
