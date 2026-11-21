@@ -9,8 +9,10 @@ Navegador (PWA)
 frontend (Vite build servido por nginx)
    │  /api/*
    ▼
-backend (FastAPI) ──── SQLite (data/txatbot.db)
-   │                └── ChromaDB (opcional, RAG)
+backend (FastAPI) ──── SQLite (data/txatbot.db) + uploads (data/uploads/)
+   │    │           └── ChromaDB (futuro, RAG)
+   │    │  HTTPS (opcional, sale de la red)
+   │    └──────────▶ proveedor en la nube compatible con OpenAI (Groq)
    │  HTTP, Tailscale
    ▼
 Ollama (máquina con GPU, puerto 11434)
@@ -19,20 +21,24 @@ Ollama (máquina con GPU, puerto 11434)
 - **frontend**: SPA React. Todo acceso a la API pasa por un único cliente (`src/lib/api`).
 - **backend**: FastAPI asíncrono. Orquesta conversaciones, personalidades, ficheros y llamadas al modelo.
 - **Ollama**: servicio aparte. Por defecto remoto (Acer con RTX 3060 vía Tailscale). Opcionalmente en el mismo Compose con el perfil `ollama`.
+- **Nube (opcional)**: proveedor compatible con OpenAI (Groq por defecto, ADR-012). Solo con `CLOUD_API_KEY`.
 - **Datos**: SQLite en `data/`, montado como volumen. Uploads en `data/uploads/`.
 
-## Backend (estructura prevista)
+## Backend
 
 Arquitectura hexagonal ligera:
 
 ```
 backend/app/
-  main.py            app FastAPI, middlewares, handlers
+  main.py            app FastAPI, middlewares, handlers, wiring (lifespan)
+  cli.py             hash-password, session-secret, dev-login
   core/              config (pydantic-settings), logging, errores, request id
-  api/routes/        routers HTTP (health, auth, chat, models, files, personas)
-  domain/            entidades y casos de uso, sin dependencias de framework
-  ports/             interfaces (LLMProvider, ConversationRepository, ...)
-  adapters/          implementaciones (ollama, sqlite, chroma)
+  api/routes/        health, auth, chat, models, conversations, attachments,
+                     personalities, osint_sources
+  domain/            entidades y reglas sin framework: prompts, personalidades, OSINT, adjuntos
+  ports/             interfaces (LLMProvider, repositorios, FileStorage)
+  adapters/          ollama, openai_compat, routing.py, sqlite (repositorios y migraciones),
+                     files (almacenamiento local, proceso aislado, PDF, imágenes)
 ```
 
 - El modelo no está acoplado: `LLMProvider` define el contrato; `OllamaProvider` (local) y `OpenAICompatibleProvider` (Groq u otro, opcional) lo implementan, y `RoutingLLMProvider` los junta en una sola lista de modelos (los remotos con prefijo `<CLOUD_NAME>/`).
@@ -102,15 +108,15 @@ Requiere sesión (401 sin cookie válida). `/api/chat` es la variante sin estado
 - Razonamiento de los modelos que lo tienen (qwen3.5, deepseek-r1…) desactivado por defecto (`OLLAMA_THINK=false`): con él, Ollama manda el razonamiento aparte, el backend lo ignora y la primera palabra puede tardar minutos o no llegar si se agota el límite de longitud.
 - Si el cliente corta la conexión, el backend cierra la petición a Ollama.
 
-## Frontend (estructura prevista)
+## Frontend
 
 ```
 frontend/src/
   lib/api/          cliente API único + mapeo de errores
   components/ui/    componentes shadcn/ui (generados)
-  components/       componentes propios
-  features/         chat, models, personas, files, settings
-  pages/
+  components/       componentes propios (error boundary…)
+  features/         auth, chat (mensajes, Markdown, adjuntos), conversations,
+                    personalities, osint-sources
 ```
 
 ## Manejo de errores
@@ -142,6 +148,7 @@ frontend/src/
 **Docker**
 - Rotación de logs `json-file` (10 MB x 3) en todos los servicios.
 - Healthcheck en el backend contra `/api/health`.
+- Contenedores sin root, `read_only`, `cap_drop: [ALL]`, `no-new-privileges` y `mem_limit` (detalle en [security.md](security.md)).
 
 ## Hardware
 

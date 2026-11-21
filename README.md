@@ -1,50 +1,78 @@
 # Txat_bot
 
-Chatbot personal que corre 100 % en local. Usa modelos abiertos servidos por Ollama, tiene una personalidad configurable y está pensado como copiloto para laboratorios y CTF autorizados (Kali, HackMyVM, DockerLabs).
+Chatbot personal que corre en local. Usa modelos abiertos servidos por Ollama, tiene personalidades configurables y está pensado como copiloto para laboratorios y CTF autorizados (Kali, HackMyVM, DockerLabs).
 
-> Estado: **Fase 0** (estructura y documentación). Todavía no hay código de aplicación. Ver [docs/roadmap.md](docs/roadmap.md).
+> Estado: **Fase 2** (personalidad y ficheros). Solo falta la PWA. Ver [docs/roadmap.md](docs/roadmap.md).
 
-## Qué hace (objetivo)
+## Qué hace
 
-- Chat en el navegador, instalable como PWA, con streaming de respuestas.
-- Selector de modelo: funciona con cualquier modelo que tenga Ollama.
-- Subida de imágenes y ficheros para analizarlos en la conversación.
-- Personalidades editables.
-- Más adelante: RAG sobre documentación (HackTricks, man pages, notas propias), búsqueda web con SearXNG, voz (faster-whisper + Piper), memoria a largo plazo y un asistente de Kali que **nunca ejecuta comandos sin confirmación**.
+- Chat en el navegador con streaming de respuestas y conversaciones guardadas en SQLite.
+- Login de un solo usuario (cookie httpOnly).
+- Selector de modelo:
+  - Locales: los de Ollama.
+  - En la nube (opcional): Groq en su plan gratuito u otro proveedor compatible con OpenAI. Lo que se envía a un modelo de la nube sale de tu red.
+- 8 personalidades incorporadas (Mentor CTF, Pentester, Auditor de Huella Digital…) más las tuyas, editables. Los límites éticos van en una capa base fija.
+- Catálogo de fuentes OSINT para el Auditor de Huella Digital.
+- Adjuntos: ficheros de texto (logs, salidas de nmap, código…), PDF e imágenes. Las imágenes solo se envían a modelos con visión.
+- Respuestas en Markdown seguro, con resaltado de código y botón de copiar.
+
+Próximas fases:
+- PWA.
+- Memoria y valoraciones para personalizar el modelo.
+- RAG con tus notas y writeups.
+- Búsqueda web con SearXNG.
+- Asistente de Kali que **nunca ejecuta comandos sin confirmación**.
+- Fine-tuning de un modelo propio.
 
 ## Stack
 
 | Capa | Tecnología |
 | --- | --- |
-| Modelos | Ollama (GPU NVIDIA) |
-| Backend | Python 3.12, FastAPI, Ruff, pytest |
-| Frontend | Vite, React, TypeScript, Tailwind, shadcn/ui, Sonner, vite-plugin-pwa, ESLint, Prettier |
-| Datos | SQLite (ChromaDB opcional para RAG) |
-| Infra | Docker Compose, NVIDIA Container Toolkit, Tailscale |
+| Modelos | Ollama (GPU NVIDIA); opcional Groq u otro proveedor compatible con OpenAI |
+| Backend | Python 3.12, FastAPI, SQLite (aiosqlite), pypdf, Pillow, uv, Ruff, pytest |
+| Frontend | Vite, React, TypeScript, Tailwind, shadcn/ui, Sonner, ESLint, Prettier, Vitest |
+| Infra | Docker Compose (contenedores sin root y de solo lectura), NVIDIA Container Toolkit, Tailscale |
 
 ## Estructura
 
 ```
-backend/     API FastAPI (app/, tests/, pyproject.toml)
-frontend/    App React + Vite
-docs/        Arquitectura, roadmap, decisiones y seguridad
+backend/     API FastAPI (app/, tests/, pyproject.toml, uv.lock)
+frontend/    SPA React + Vite, servida por nginx en Docker
+docs/        Arquitectura, roadmap, decisiones (ADR) y seguridad
 data/        SQLite, uploads y backups locales (fuera de git)
 docker-compose.yml
 ```
 
-## Puesta en marcha (a partir de Fase 1)
+## Puesta en marcha
 
 ```bash
 cp .env.example .env
 cp backend/.env.example backend/.env
+```
+
+Rellena `backend/.env`:
+- `AUTH_USERNAME`.
+- `AUTH_PASSWORD_HASH`, entre comillas simples. Se genera con `uv run python -m app.cli hash-password` desde `backend/`.
+- `SESSION_SECRET`, que se genera con `uv run python -m app.cli session-secret`.
+- `OLLAMA_BASE_URL`.
+- `CLOUD_API_KEY`, solo si quieres modelos en la nube.
+
+Después:
+
+```bash
 docker compose up -d
 ```
 
-Ollama corre en la máquina con GPU y el backend lo alcanza por Tailscale (`OLLAMA_BASE_URL`). Para levantar Ollama en la misma máquina:
+Ollama corre en la máquina con GPU y el backend lo alcanza por Tailscale (`OLLAMA_BASE_URL`). Para levantarlo en la misma máquina:
 
 ```bash
 docker compose --profile ollama up -d
 ```
+
+Desarrollo sin Docker:
+- Backend: `uv sync --extra dev` y luego `uv run uvicorn app.main:app --reload`.
+- Frontend: `npm install` y luego `npm run dev` (puerto 5173).
+- Más comandos en [CLAUDE.md](CLAUDE.md).
 
 ## Seguridad
 
@@ -56,5 +84,5 @@ La ayuda en hacking está pensada para entornos propios o con autorización expl
 
 - [Arquitectura](docs/architecture.md)
 - [Roadmap](docs/roadmap.md)
-- [Decisiones](docs/decisions.md)
+- [Decisiones (ADR)](docs/decisions.md)
 - [Seguridad](docs/security.md)
