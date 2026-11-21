@@ -40,6 +40,7 @@ Próximas fases:
 backend/     API FastAPI (app/, tests/, pyproject.toml, uv.lock)
 frontend/    SPA React + Vite, servida por nginx en Docker
 docs/        Arquitectura, roadmap, decisiones (ADR) y seguridad
+evals/       Batería de preguntas para medir las respuestas de los modelos
 data/        SQLite, uploads y backups locales (fuera de git)
 docker-compose.yml
 ```

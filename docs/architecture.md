@@ -109,6 +109,13 @@ Requiere sesión (401 sin cookie válida). `/api/chat` es la variante sin estado
 - Razonamiento de los modelos que lo tienen (qwen3.5, deepseek-r1…) desactivado por defecto (`OLLAMA_THINK=false`): con él, Ollama manda el razonamiento aparte, el backend lo ignora y la primera palabra puede tardar minutos o no llegar si se agota el límite de longitud.
 - Si el cliente corta la conexión, el backend cierra la petición a Ollama.
 
+## Evaluación de respuestas
+
+`evals/questions.yaml` es una batería fija de preguntas (comandos, datos comprobables, trampas, inyección de prompt, método del Mentor y límites de OSINT). `uv run python -m app.cli eval --models <modelos> [--think on|off] [--personality <nombre>] [--only <ids>]` (desde `backend/`) las hace con la misma composición de prompt, el mismo ajuste de contexto y el mismo `LLMProvider` que el chat (`app/adapters/llm_factory.py`), y escribe un informe por modelo en `evals/reports/` (fuera de git):
+- Comprobaciones automáticas por pregunta: `must_any` (cada grupo de regex debe aparecer) y `must_not` (ninguno), más dos globales: sin emojis y en español.
+- Las que piden juicio (trampas, Mentor, límites) salen como "REVISIÓN MANUAL".
+- No va en la CI (necesita modelos); el corrector tiene tests unitarios.
+
 ## Frontend
 
 ```
