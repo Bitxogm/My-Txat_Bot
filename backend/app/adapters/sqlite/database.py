@@ -72,6 +72,26 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX idx_osint_sources_category ON osint_sources (category);
     """,
+    # v4: file attachments (ADR-015). The bytes live in data/uploads under storage_key; the
+    # extracted text is kept here. message_id is NULL until the file is sent with a message.
+    """
+    CREATE TABLE attachments (
+        id TEXT PRIMARY KEY,
+        conversation_id TEXT NOT NULL REFERENCES conversations (id) ON DELETE CASCADE,
+        message_id INTEGER REFERENCES messages (id) ON DELETE CASCADE,
+        filename TEXT NOT NULL,
+        mime TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        size_bytes INTEGER NOT NULL,
+        sha256 TEXT NOT NULL,
+        storage_key TEXT NOT NULL UNIQUE,
+        text TEXT NOT NULL DEFAULT '',
+        truncated INTEGER NOT NULL DEFAULT 0 CHECK (truncated IN (0, 1)),
+        created_at TEXT NOT NULL
+    );
+    CREATE INDEX idx_attachments_conversation ON attachments (conversation_id);
+    CREATE INDEX idx_attachments_message ON attachments (message_id);
+    """,
 ]
 
 
