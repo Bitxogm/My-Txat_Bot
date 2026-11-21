@@ -4,6 +4,7 @@ import {
   getConversation,
   isAbortError,
   sendMessage,
+  type MessageAttachment,
   type Conversation,
   type PersonalityRef,
   type MessageStatus as StoredStatus,
@@ -18,6 +19,8 @@ export interface UiMessage {
   role: 'user' | 'assistant';
   content: string;
   status: MessageStatus;
+  /** Files sent with a user message. */
+  attachments: MessageAttachment[];
 }
 
 export interface UseChatOptions {
@@ -34,8 +37,21 @@ export interface UseChat {
   isLoading: boolean;
   open: (id: string) => Promise<Conversation | null>;
   startNew: () => void;
-  /** `personalityId` only matters for the first message, which creates the conversation. */
-  send: (content: string, model: string, personalityId?: string) => Promise<void>;
+  /**
+   * Id of the open conversation, creating it first if this is a new chat (files are uploaded to
+   * a conversation). null if creating it failed (already notified).
+   */
+  ensureConversation: (model: string, personalityId?: string) => Promise<string | null>;
+  /**
+   * `personalityId` only matters for the first message, which creates the conversation.
+   * Resolves with the conversation id (null if it couldn't be created or nothing was sent).
+   */
+  send: (
+    content: string,
+    model: string,
+    personalityId?: string,
+    attachments?: MessageAttachment[],
+  ) => Promise<string | null>;
   stop: () => void;
 }
 
@@ -46,6 +62,7 @@ function fromStored(message: StoredMessage): UiMessage | null {
     role: message.role,
     content: message.content,
     status: message.status,
+    attachments: message.attachments ?? [],
   };
 }
 
@@ -125,10 +142,40 @@ export function useChat({ onActivity }: UseChatOptions = {}): UseChat {
     [select],
   );
 
+  const createIfNeeded = useCallback(
+    async (model: string, personalityId?: string) => {
+      const current = conversationRef.current;
+      if (current) return current;
+      const created = await createConversation({ model, personality_id: personalityId });
+      setPersonality(created.personality);
+      select(created.id);
+      onActivityRef.current?.();
+      return created.id;
+    },
+    [select],
+  );
+
+  const ensureConversation = useCallback(
+    async (model: string, personalityId?: string) => {
+      try {
+        return await createIfNeeded(model, personalityId);
+      } catch (error) {
+        notifyError(error);
+        return null;
+      }
+    },
+    [createIfNeeded],
+  );
+
   const send = useCallback(
-    async (content: string, model: string, personalityId?: string) => {
+    async (
+      content: string,
+      model: string,
+      personalityId?: string,
+      attachments: MessageAttachment[] = [],
+    ) => {
       const text = content.trim();
-      if (!text || streamRef.current) return;
+      if (!text || streamRef.current) return null;
 
       const controller = new AbortController();
       streamRef.current = controller;
@@ -138,28 +185,22 @@ export function useChat({ onActivity }: UseChatOptions = {}): UseChat {
       const assistantId = `l${nextId.current++}`;
       setMessages((prev) => [
         ...prev,
-        { id: userId, role: 'user', content: text, status: 'done' },
-        { id: assistantId, role: 'assistant', content: '', status: 'streaming' },
+        { id: userId, role: 'user', content: text, status: 'done', attachments },
+        { id: assistantId, role: 'assistant', content: '', status: 'streaming', attachments: [] },
       ]);
 
+      let id: string | null = conversationRef.current;
       try {
-        let id = conversationRef.current;
-        if (!id) {
-          const created = await createConversation({ model, personality_id: personalityId });
-          id = created.id;
-          setPersonality(created.personality);
-          select(id);
-          onActivityRef.current?.();
-        }
-        await sendMessage(
-          id,
-          { content: text, model },
-          {
-            signal: controller.signal,
-            onToken: (token) =>
-              updateMessage(assistantId, (m) => ({ ...m, content: m.content + token })),
-          },
-        );
+        id = await createIfNeeded(model, personalityId);
+        const body =
+          attachments.length > 0
+            ? { content: text, model, attachment_ids: attachments.map((a) => a.id) }
+            : { content: text, model };
+        await sendMessage(id, body, {
+          signal: controller.signal,
+          onToken: (token) =>
+            updateMessage(assistantId, (m) => ({ ...m, content: m.content + token })),
+        });
         updateMessage(assistantId, (m) => ({ ...m, status: 'done' }));
       } catch (error) {
         if (isAbortError(error)) {
@@ -173,8 +214,9 @@ export function useChat({ onActivity }: UseChatOptions = {}): UseChat {
         setIsStreaming(false);
         onActivityRef.current?.();
       }
+      return id;
     },
-    [select, updateMessage],
+    [createIfNeeded, updateMessage],
   );
 
   return {
@@ -185,6 +227,7 @@ export function useChat({ onActivity }: UseChatOptions = {}): UseChat {
     isLoading,
     open,
     startNew,
+    ensureConversation,
     send,
     stop,
   };

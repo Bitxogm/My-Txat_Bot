@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef } from 'react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { cn } from '@/lib/utils';
+import { AttachmentChip } from './attachment-chip';
 import type { UiMessage } from './use-chat';
 
 const STATUS_NOTE: Partial<Record<UiMessage['status'], string>> = {
@@ -69,6 +70,19 @@ export function MessageList({
                   message.role === 'user' ? 'items-end' : 'items-start',
                 )}
               >
+                {message.attachments.length > 0 && (
+                  <ul aria-label="Ficheros enviados" className="flex flex-wrap justify-end gap-1.5">
+                    {message.attachments.map((file) => (
+                      <li key={file.id}>
+                        <AttachmentChip
+                          filename={file.filename}
+                          sizeBytes={file.size_bytes}
+                          truncated={file.truncated}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 {showBubble && (
                   <div
                     className={cn(
