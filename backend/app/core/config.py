@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     ollama_timeout_seconds: float = Field(default=2.0, gt=0)
     ollama_chat_read_timeout_seconds: float = Field(default=300.0, gt=0)
     ollama_think: bool = False
+    # Context window (tokens) for local models when the personality doesn't set num_ctx. Ollama's
+    # own default (4096) fills up in two or three turns with an image or long answers.
+    ollama_num_ctx: int = Field(default=8192, ge=2048, le=131072)
     default_model: str = ""
 
     # Optional cloud provider with an OpenAI-compatible API (Groq by default). Off without a key.
@@ -26,6 +29,9 @@ class Settings(BaseSettings):
     # Comma-separated allowlist of model ids; empty = every chat model the provider lists.
     cloud_models: str = ""
     cloud_timeout_seconds: float = Field(default=10.0, gt=0)
+    # Context budget (tokens) used to fit the history for cloud models (their window is fixed
+    # by the provider and is usually much larger).
+    cloud_context_tokens: int = Field(default=32768, ge=2048, le=1_000_000)
     # Comma-separated cloud model ids that accept images (the OpenAI-style /models list doesn't
     # say). Defaults: Groq's vision models.
     cloud_vision_models: str = (

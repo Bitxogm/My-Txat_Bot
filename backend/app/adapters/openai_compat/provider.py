@@ -13,6 +13,7 @@ from typing import Any
 import httpx
 
 from app.core.errors import (
+    ContextTooLongError,
     EmptyReplyError,
     ModelNotFoundError,
     ModelRateLimitedError,
@@ -136,6 +137,10 @@ class OpenAICompatibleProvider:
             raise ModelUnavailableError(
                 f"{self.name} rechazó la clave de API (revisa CLOUD_API_KEY)"
             )
+        if status in (httpx.codes.BAD_REQUEST, httpx.codes.REQUEST_ENTITY_TOO_LARGE) and (
+            "context_length" in response.text or "context window" in response.text.lower()
+        ):
+            raise ContextTooLongError
         if status == httpx.codes.NOT_FOUND and model:
             raise ModelNotFoundError(f"El modelo '{model}' no existe en {self.name}")
         if status == httpx.codes.TOO_MANY_REQUESTS:
