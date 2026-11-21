@@ -8,15 +8,27 @@ import {
   setUnauthorizedHandler,
 } from '@/lib/api';
 import { notifyError } from '@/lib/notify-error';
+import { clearRuntimeCaches } from '@/pwa/caches';
 import { toast } from 'sonner';
 
 export type AuthState =
-  { status: 'checking' } | { status: 'anonymous' } | { status: 'authenticated'; username: string };
+  | { status: 'checking' }
+  | { status: 'anonymous' }
+  | { status: 'authenticated'; username: string }
+  /** The server can't be reached (no network, backend down): nothing stale is shown. */
+  | { status: 'offline' };
 
 export interface UseAuth {
   state: AuthState;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  /** Checks the session again (after being offline). */
+  retry: () => void;
+}
+
+/** No answer from the backend: network down, or nginx answering 502/503/504 for it. */
+function isUnreachable(error: unknown): boolean {
+  return error instanceof ApiError && (error.kind === 'network' || error.kind === 'server');
 }
 
 export function useAuth(): UseAuth {
@@ -36,10 +48,17 @@ export function useAuth(): UseAuth {
         if (statusRef.current === 'authenticated' && !loggingOutRef.current) {
           toast.info('Tu sesión ha caducado. Vuelve a iniciar sesión.');
         }
+        void clearRuntimeCaches();
         setState({ status: 'anonymous' });
       }),
     [],
   );
+
+  const [attempt, setAttempt] = useState(0);
+  const retry = useCallback(() => {
+    setState({ status: 'checking' });
+    setAttempt((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -47,12 +66,23 @@ export function useAuth(): UseAuth {
       ({ username }) => setState({ status: 'authenticated', username }),
       (error: unknown) => {
         if (isAbortError(error)) return;
+        if (isUnreachable(error)) {
+          setState({ status: 'offline' });
+          return;
+        }
         notifyError(error);
         setState({ status: 'anonymous' });
       },
     );
     return () => controller.abort();
-  }, []);
+  }, [attempt]);
+
+  // Back online: check again by itself.
+  useEffect(() => {
+    if (state.status !== 'offline') return;
+    window.addEventListener('online', retry);
+    return () => window.removeEventListener('online', retry);
+  }, [state.status, retry]);
 
   const login = useCallback(async (username: string, password: string) => {
     await apiLogin({ username, password });
@@ -74,8 +104,9 @@ export function useAuth(): UseAuth {
     } finally {
       loggingOutRef.current = false;
     }
+    await clearRuntimeCaches();
     setState({ status: 'anonymous' });
   }, []);
 
-  return { state, login, logout };
+  return { state, login, logout, retry };
 }

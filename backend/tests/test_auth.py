@@ -259,3 +259,19 @@ async def test_restart_closes_existing_sessions(
     async with make_client(create_app(make_settings())) as c:
         c.cookies.set(SESSION_COOKIE, token)
         assert (await c.get("/api/auth/me")).status_code == 401
+
+
+async def test_logout_asks_the_browser_to_drop_its_cache(client: httpx.AsyncClient) -> None:
+    response = await client.post("/api/auth/logout")
+
+    assert response.status_code == 204
+    assert response.headers["clear-site-data"] == '"cache"'
+
+
+async def test_api_responses_are_not_stored_by_the_browser(client: httpx.AsyncClient) -> None:
+    me = await client.get("/api/auth/me")
+    conversations = await client.get("/api/conversations")
+    missing = await client.get("/api/conversations/" + "0" * 32)
+
+    for response in (me, conversations, missing):
+        assert response.headers["cache-control"] == "no-store"

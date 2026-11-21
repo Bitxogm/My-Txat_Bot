@@ -19,14 +19,14 @@ Cada fase se divide en tareas pequeñas. Una tarea = una rama = una PR.
 - [x] Login de un solo usuario (cookie httpOnly)
 - [x] Persistencia de conversaciones en SQLite
 
-## Fase 2: Personalidad y ficheros (actual)
+## Fase 2: Personalidad y ficheros (cerrada)
 - [x] Personalidades editables (system prompt + parámetros)
 - [x] Catálogo de fuentes OSINT para el Auditor de Huella Digital (ADR-014)
 - [x] Ficheros adjuntos de texto y PDF (ADR-015)
 - [x] Imágenes para modelos con visión (ADR-016)
-- [ ] PWA (instalable, offline shell)
+- [x] PWA instalable con shell offline (ADR-017)
 
-## Fase 3: Personalización (memoria y valoraciones)
+## Fase 3: Personalización (memoria y valoraciones) (actual)
 Objetivo: un modelo que "aprende" de Void con el uso. Orden acordado: memoria → conocimiento → entrenamiento.
 - [ ] Memoria persistente: datos sobre el usuario, su entorno y preferencias que se inyectan en cada conversación. El modelo propone recuerdos y el usuario los aprueba, edita o borra (nada se guarda sin visto bueno)
 - [ ] Valoraciones 👍/👎 y corrección de respuestas en el chat

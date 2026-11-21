@@ -13,6 +13,9 @@ logger = logging.getLogger("app.request")
 class RequestContextMiddleware:
     """Assigns a request_id, logs each request and turns unhandled errors into a JSON 500.
 
+    API responses default to `Cache-Control: no-store`: conversations, attachments and session
+    data must not stay in the browser's HTTP cache after a logout (shared or stolen device).
+
     Pure ASGI (not BaseHTTPMiddleware) so streaming responses (SSE) pass through untouched.
     """
 
@@ -24,6 +27,7 @@ class RequestContextMiddleware:
             await self.app(scope, receive, send)
             return
 
+        is_api = str(scope.get("path", "")).startswith("/api")
         request_id = resolve_request_id(Headers(scope=scope).get(REQUEST_ID_HEADER))
         token = request_id_var.set(request_id)
         started = time.perf_counter()
@@ -35,7 +39,10 @@ class RequestContextMiddleware:
             if message["type"] == "http.response.start":
                 response_started = True
                 status_code = message["status"]
-                MutableHeaders(scope=message)[REQUEST_ID_HEADER] = request_id
+                headers = MutableHeaders(scope=message)
+                headers[REQUEST_ID_HEADER] = request_id
+                if is_api and "cache-control" not in headers:
+                    headers["Cache-Control"] = "no-store"
             await send(message)
 
         try:

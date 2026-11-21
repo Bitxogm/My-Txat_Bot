@@ -2,7 +2,7 @@
 
 Chatbot personal que corre en local. Usa modelos abiertos servidos por Ollama, tiene personalidades configurables y está pensado como copiloto para laboratorios y CTF autorizados (Kali, HackMyVM, DockerLabs).
 
-> Estado: **Fase 2** (personalidad y ficheros). Solo falta la PWA. Ver [docs/roadmap.md](docs/roadmap.md).
+> Estado: **Fase 3** (personalización). Ver [docs/roadmap.md](docs/roadmap.md).
 
 ## Qué hace
 
@@ -15,9 +15,10 @@ Chatbot personal que corre en local. Usa modelos abiertos servidos por Ollama, t
 - Catálogo de fuentes OSINT para el Auditor de Huella Digital.
 - Adjuntos: ficheros de texto (logs, salidas de nmap, código…), PDF e imágenes. Las imágenes solo se envían a modelos con visión.
 - Respuestas en Markdown seguro, con resaltado de código y botón de copiar.
+- Modo día/noche.
+- PWA instalable (con HTTPS, p. ej. `tailscale serve`), con pantalla de "sin conexión" en lugar de datos viejos.
 
 Próximas fases:
-- PWA.
 - Memoria y valoraciones para personalizar el modelo.
 - RAG con tus notas y writeups.
 - Búsqueda web con SearXNG.
@@ -30,7 +31,7 @@ Próximas fases:
 | --- | --- |
 | Modelos | Ollama (GPU NVIDIA); opcional Groq u otro proveedor compatible con OpenAI |
 | Backend | Python 3.12, FastAPI, SQLite (aiosqlite), pypdf, Pillow, uv, Ruff, pytest |
-| Frontend | Vite, React, TypeScript, Tailwind, shadcn/ui, Sonner, ESLint, Prettier, Vitest |
+| Frontend | Vite, React, TypeScript, Tailwind, shadcn/ui, Sonner, vite-plugin-pwa, ESLint, Prettier, Vitest |
 | Infra | Docker Compose (contenedores sin root y de solo lectura), NVIDIA Container Toolkit, Tailscale |
 
 ## Estructura
