@@ -3,6 +3,8 @@
 uv run python -m app.cli hash-password   # asks for the password, prints AUTH_PASSWORD_HASH
 uv run python -m app.cli session-secret  # prints a random SESSION_SECRET
 uv run python -m app.cli dev-login       # local dev only: random password + quick-login card
+uv run python -m app.cli eval --models qwen3.5:9b groq/openai/gpt-oss-120b [--think on|off]
+                                         # answer battery (evals/questions.yaml) -> evals/reports/
 """
 
 import argparse
@@ -135,6 +137,83 @@ def dev_login(root: Path = REPO_ROOT, force: bool = False) -> int:
     return 0
 
 
+EVALS_DIR = REPO_ROOT / "evals"
+
+
+def run_evals(
+    models: list[str],
+    think: str | None,
+    personality: str | None,
+    questions_file: Path,
+    out_dir: Path,
+    only: list[str] | None,
+) -> int:
+    """Asks every question to every model and writes one Markdown report per model."""
+    import asyncio
+    from datetime import datetime
+
+    from app.adapters.llm_factory import build_llm_provider
+    from app.core.config import get_settings
+    from app.evals.checks import load_questions
+    from app.evals.runner import (
+        Result,
+        ask,
+        render_report,
+        report_path,
+        resolve_personality,
+    )
+
+    try:
+        questions = load_questions(questions_file)
+        if personality:
+            resolve_personality(personality)
+        for q in questions:
+            if q.personality:
+                resolve_personality(q.personality)
+    except (OSError, ValueError) as exc:
+        sys.stderr.write(f"{exc}\n")
+        return 1
+    if only:
+        questions = [q for q in questions if q.id in only]
+    think_flag = None if think is None else think == "on"
+    settings = get_settings()
+
+    async def run() -> list[tuple[str, bool | None, list[Result]]]:
+        llm, clients = build_llm_provider(settings, think=think_flag)
+        runs: list[tuple[str, bool | None, list[Result]]] = []
+        try:
+            for model in models:
+                remote = settings.cloud_enabled and model.startswith(f"{settings.cloud_name}/")
+                model_think = (
+                    None
+                    if remote
+                    else (settings.ollama_think if think_flag is None else think_flag)
+                )
+                results: list[Result] = []
+                for q in questions:
+                    result = await ask(llm, model, q, personality, settings)
+                    sys.stdout.write(
+                        f"{model} · {q.id}: {result.status} ({result.seconds:.1f} s)\n"
+                    )
+                    sys.stdout.flush()
+                    results.append(result)
+                runs.append((model, model_think, results))
+        finally:
+            for client in clients:
+                await client.aclose()
+        return runs
+
+    runs = asyncio.run(run())
+    out_dir.mkdir(parents=True, exist_ok=True)
+    now = datetime.now()
+    for model, model_think, results in runs:
+        path = report_path(out_dir, model, model_think, now)
+        path.write_text(render_report(model, model_think, results, now), encoding="utf-8")
+        passed = sum(1 for r in results if r.status != "FALLO")
+        sys.stdout.write(f"{model}: {passed}/{len(results)} · informe en {path}\n")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m app.cli")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -142,7 +221,20 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("session-secret", help="Genera SESSION_SECRET")
     dev = sub.add_parser("dev-login", help="Credenciales locales de desarrollo + tarjeta de acceso")
     dev.add_argument("--force", action="store_true", help="Sustituir una contraseña existente")
+    ev = sub.add_parser("eval", help="Batería de evaluación de respuestas (evals/questions.yaml)")
+    ev.add_argument("--models", nargs="+", required=True, help="Modelos, p. ej. qwen3.5:9b")
+    ev.add_argument("--think", choices=["on", "off"], help="Razonamiento de Ollama (def.: .env)")
+    ev.add_argument(
+        "--personality", help="Personalidad por defecto (id o nombre; def.: Mentor CTF)"
+    )
+    ev.add_argument("--questions", type=Path, default=EVALS_DIR / "questions.yaml")
+    ev.add_argument("--out", type=Path, default=EVALS_DIR / "reports")
+    ev.add_argument("--only", nargs="+", help="Solo estos ids de pregunta")
     args = parser.parse_args(argv)
+    if args.command == "eval":
+        return run_evals(
+            args.models, args.think, args.personality, args.questions, args.out, args.only
+        )
     if args.command == "hash-password":
         return hash_password()
     if args.command == "session-secret":
