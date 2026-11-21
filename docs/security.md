@@ -11,7 +11,7 @@
 - Sesión: cookie `txat_session` firmada con `SESSION_SECRET` (itsdangerous, HMAC-SHA256), `httpOnly`, `SameSite=Strict`, `Path=/api`, caducidad `SESSION_TTL_HOURS` (72 h por defecto). `Secure` solo con `COOKIE_SECURE=true` (HTTPS). Nada de tokens en `localStorage`.
 - Revocación: el logout invalida todas las sesiones emitidas hasta ese momento (un solo usuario, logout global). Reiniciar el backend también las cierra, igual que cambiar la contraseña o `SESSION_SECRET`.
 - Fail closed: sin usuario, un hash argon2id válido y un secreto de ≥ 32 caracteres, el login y la API protegida responden 503 (y se avisa en el log al arrancar).
-- `/api/health` es público (healthcheck de Docker); `/api/models`, `/api/chat` y `/api/auth/logout` exigen sesión.
+- `/api/health` y `/api/auth/login` son públicos (healthcheck de Docker y login); el resto de la API exige sesión.
 - Rate limit global en el login: `LOGIN_MAX_FAILURES` intentos en `LOGIN_WINDOW_SECONDS` → 429 con `Retry-After`. Cada intento se reserva antes de verificar, así que las peticiones en paralelo no se lo saltan, y la verificación argon2 se hace de una en una (acota memoria y CPU).
 - Frontend: el estado de sesión sale siempre de `/api/auth/me`; cualquier 401 devuelve al login. Si el logout falla por red o 5xx, la app sigue autenticada y avisa (la cookie es httpOnly y no se puede borrar desde JS). Al cerrar sesión se corta el stream en curso.
 - Acceso rápido de desarrollo: `uv run python -m app.cli dev-login` genera una contraseña aleatoria, guarda su hash en `backend/.env` (con la marca `DEV_LOGIN=1`) y la contraseña en `frontend/.env.local` (`DEV_LOGIN_USER`/`DEV_LOGIN_PASSWORD`, sin prefijo `VITE_`). Ficheros fuera de git, escritos de forma atómica con permisos 600.
