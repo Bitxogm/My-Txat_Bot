@@ -1,6 +1,7 @@
 export { request, send, setUnauthorizedHandler } from './client';
 export type { RequestOptions } from './client';
 export {
+  attachmentContentUrl,
   createConversation,
   createOsintSource,
   createPersonality,
