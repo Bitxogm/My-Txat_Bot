@@ -1,3 +1,4 @@
+import { ThemeToggle } from '@/components/theme-toggle';
 import { useRef, useState, type FormEvent } from 'react';
 import { KeyRoundIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -44,7 +45,8 @@ export function LoginPage({ onLogin, devLogin = DEV_LOGIN }: LoginPageProps) {
   }
 
   return (
-    <main className="flex min-h-svh items-center justify-center p-4">
+    <main className="relative flex min-h-svh items-center justify-center p-4">
+      <ThemeToggle className="absolute top-3 right-3" />
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle>
