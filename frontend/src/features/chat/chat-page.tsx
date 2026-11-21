@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { LogOutIcon, MenuIcon } from 'lucide-react';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import {
@@ -168,6 +169,7 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
               onReload={reload}
               disabled={chat.isStreaming}
             />
+            <ThemeToggle />
             <Button
               variant="ghost"
               size="icon-sm"

@@ -2,9 +2,11 @@ import { Toaster } from '@/components/ui/sonner';
 import { LoginPage } from '@/features/auth/login-page';
 import { useAuth } from '@/features/auth/use-auth';
 import { ChatPage } from '@/features/chat/chat-page';
+import { useTheme } from '@/lib/theme';
 
 export default function App() {
   const { state, login, logout } = useAuth();
+  const { theme } = useTheme();
 
   return (
     <>
@@ -17,7 +19,7 @@ export default function App() {
       ) : (
         <ChatPage username={state.username} onLogout={() => void logout()} />
       )}
-      <Toaster richColors closeButton />
+      <Toaster theme={theme} richColors closeButton />
     </>
   );
 }
