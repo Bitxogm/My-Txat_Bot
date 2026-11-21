@@ -1,3 +1,5 @@
+import base64
+import dataclasses
 import json
 import logging
 from collections.abc import AsyncIterator, Sequence
@@ -26,6 +28,9 @@ class OllamaProvider:
         # Reasoning models (qwen3.5, deepseek-r1...) otherwise "think" for tens of seconds before
         # the first visible word, and can spend the whole length budget without answering.
         self._think = think
+        # Capabilities per model name, with the digest they were read for (/api/show is a
+        # request per model; a re-pulled tag gets a new digest and is read again).
+        self._capabilities: dict[str, tuple[str, frozenset[str]]] = {}
 
     async def is_available(self) -> bool:
         try:
@@ -50,7 +55,36 @@ class OllamaProvider:
             raw_models = response.json().get("models", [])
         except ValueError as exc:
             raise ModelUnavailableError("Respuesta no válida del servidor de modelos") from exc
-        return [_to_model_info(raw) for raw in raw_models]
+        models: list[ModelInfo] = []
+        for raw in raw_models:
+            info = _to_model_info(raw)
+            capabilities = await self._capabilities_of(info.name, str(raw.get("digest", "")))
+            models.append(dataclasses.replace(info, vision="vision" in capabilities))
+        return models
+
+    async def supports_vision(self, model: str) -> bool:
+        return "vision" in await self._capabilities_of(model, digest=None)
+
+    async def _capabilities_of(self, model: str, digest: str | None) -> frozenset[str]:
+        """Ollama's capabilities for a model ("completion", "vision", "tools"...). Cached per
+        name; `digest` (from /api/tags) invalidates a stale entry. Empty if unknown."""
+        cached = self._capabilities.get(model)
+        if cached and (digest is None or cached[0] == digest):
+            return cached[1]
+        try:
+            response = await self._client.post("/api/show", json={"model": model})
+            raw = response.json() if response.status_code == httpx.codes.OK else {}
+        except (httpx.HTTPError, ValueError) as exc:
+            logger.warning("Ollama /api/show failed for a model: %s", type(exc).__name__)
+            return frozenset()
+        values = raw.get("capabilities") if isinstance(raw, dict) else None
+        capabilities = (
+            frozenset(str(c) for c in values) if isinstance(values, list) else frozenset()
+        )
+        if response.status_code == httpx.codes.OK:
+            # Only models that exist get cached, so the cache stays as small as the model list.
+            self._capabilities[model] = (digest or "", capabilities)
+        return capabilities
 
     async def stream_chat(
         self,
@@ -60,7 +94,7 @@ class OllamaProvider:
     ) -> AsyncIterator[str]:
         payload = {
             "model": model,
-            "messages": [{"role": m.role, "content": m.content} for m in messages],
+            "messages": [_ollama_message(m) for m in messages],
             "stream": True,
             "think": self._think,
         }
@@ -96,6 +130,14 @@ class OllamaProvider:
                         return
         except httpx.HTTPError as exc:
             raise _unavailable(exc) from exc
+
+
+def _ollama_message(message: ChatMessage) -> dict[str, object]:
+    out: dict[str, object] = {"role": message.role, "content": message.content}
+    if message.images:
+        # Ollama takes raw base64 (no data: prefix); it detects the format itself.
+        out["images"] = [base64.b64encode(image.data).decode("ascii") for image in message.images]
+    return out
 
 
 def _ollama_options(params: GenerationParams | None) -> dict[str, float | int]:

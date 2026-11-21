@@ -4,6 +4,7 @@ Only `GET /models` and streaming `POST /chat/completions` are used, so any provi
 implements that subset works by changing CLOUD_BASE_URL.
 """
 
+import base64
 import json
 import logging
 from collections.abc import AsyncIterator, Sequence
@@ -33,10 +34,12 @@ class OpenAICompatibleProvider:
         name: str,
         allowed_models: Sequence[str] = (),
         chat_timeout: httpx.Timeout | None = None,
+        vision_models: Sequence[str] = (),
     ) -> None:
         self._client = client
         self.name = name
         self._allowed = set(allowed_models)
+        self._vision = set(vision_models)
         self._chat_timeout = chat_timeout or client.timeout
 
     async def is_available(self) -> bool:
@@ -62,7 +65,13 @@ class OpenAICompatibleProvider:
             ids = [i for i in ids if i in self._allowed]
         else:
             ids = [i for i in ids if not any(marker in i.lower() for marker in _NON_CHAT_MARKERS)]
-        return [ModelInfo(name=i, size_bytes=0, remote=True) for i in ids]
+        return [ModelInfo(name=i, size_bytes=0, remote=True, vision=i in self._vision) for i in ids]
+
+    async def supports_vision(self, model: str) -> bool:
+        return model in self._vision and self._is_allowed(model)
+
+    def _is_allowed(self, model: str) -> bool:
+        return not self._allowed or model in self._allowed
 
     async def stream_chat(
         self,
@@ -70,9 +79,12 @@ class OpenAICompatibleProvider:
         messages: Sequence[ChatMessage],
         params: GenerationParams | None = None,
     ) -> AsyncIterator[str]:
+        if not self._is_allowed(model):
+            # CLOUD_MODELS is an allowlist, also for clients that ask for a model by name.
+            raise ModelNotFoundError(f"El modelo '{model}' no está permitido en {self.name}")
         payload: dict[str, object] = {
             "model": model,
-            "messages": [{"role": m.role, "content": m.content} for m in messages],
+            "messages": [_openai_message(m) for m in messages],
             "stream": True,
         }
         # temperature and top_p are top-level here; num_ctx has no equivalent in this API (the
@@ -137,6 +149,18 @@ class OpenAICompatibleProvider:
         if isinstance(exc, httpx.TimeoutException):
             return ModelUnavailableError(f"{self.name} tardó demasiado en responder")
         return ModelUnavailableError(f"No se puede conectar con {self.name}")
+
+
+def _openai_message(message: ChatMessage) -> dict[str, object]:
+    if not message.images:
+        return {"role": message.role, "content": message.content}
+    parts: list[dict[str, object]] = [{"type": "text", "text": message.content}]
+    for image in message.images:
+        encoded = base64.b64encode(image.data).decode("ascii")
+        parts.append(
+            {"type": "image_url", "image_url": {"url": f"data:{image.mime};base64,{encoded}"}}
+        )
+    return {"role": message.role, "content": parts}
 
 
 def build_openai_compatible_client(

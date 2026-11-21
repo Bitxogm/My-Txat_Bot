@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     # Comma-separated allowlist of model ids; empty = every chat model the provider lists.
     cloud_models: str = ""
     cloud_timeout_seconds: float = Field(default=10.0, gt=0)
+    # Comma-separated cloud model ids that accept images (the OpenAI-style /models list doesn't
+    # say). Defaults: Groq's vision models.
+    cloud_vision_models: str = (
+        "meta-llama/llama-4-scout-17b-16e-instruct,meta-llama/llama-4-maverick-17b-128e-instruct"
+    )
 
     database_url: str = "sqlite:///./data/txatbot.db"
 
@@ -59,6 +64,10 @@ class Settings(BaseSettings):
     @property
     def cloud_model_list(self) -> list[str]:
         return [m.strip() for m in self.cloud_models.split(",") if m.strip()]
+
+    @property
+    def cloud_vision_model_list(self) -> list[str]:
+        return [m.strip() for m in self.cloud_vision_models.split(",") if m.strip()]
 
     @property
     def auth_configured(self) -> bool:

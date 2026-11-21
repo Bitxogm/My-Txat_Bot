@@ -17,6 +17,10 @@ class LLMProvider(Protocol):
 
     async def list_models(self) -> list[ModelInfo]: ...
 
+    async def supports_vision(self, model: str) -> bool:
+        """True if `model` accepts images. False when unknown or the server is down."""
+        ...
+
     def stream_chat(
         self,
         model: str,
@@ -24,6 +28,9 @@ class LLMProvider(Protocol):
         params: GenerationParams | None = None,
     ) -> AsyncIterator[str]:
         """Yield the assistant reply in text chunks as the model produces them.
+
+        Images on a message (ChatMessage.images) are only sent to models that support vision;
+        callers check supports_vision first.
 
         `params` (temperature, top_p, num_ctx) are applied when the backend supports them and
         silently ignored when it doesn't; None values keep the model's defaults.
