@@ -48,6 +48,7 @@ const MODELS: ModelsResponse = {
       parameter_size: '7B',
       quantization: 'Q4_K_M',
       remote: false,
+      vision: false,
     },
     {
       name: 'b:8b',
@@ -56,6 +57,7 @@ const MODELS: ModelsResponse = {
       parameter_size: null,
       quantization: null,
       remote: false,
+      vision: false,
     },
   ],
   default_model: 'b:8b',
@@ -533,5 +535,85 @@ describe('ChatPage attachments', () => {
     await user.upload(screen.getByTestId('file-input'), textFile('a.txt'));
 
     expect(await screen.findByText(/saldrá de tu red/)).toBeInTheDocument();
+  });
+
+  function imageFile(name: string): File {
+    return new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], name, { type: 'image/png' });
+  }
+
+  it('shows an image thumbnail and blocks sending to a model without vision', async () => {
+    vi.mocked(uploadAttachment).mockResolvedValue(
+      uploaded('i'.repeat(32), 'captura.png', { kind: 'image', mime: 'image/png' }),
+    );
+    const { user } = await renderReady(); // b:8b, no vision
+
+    await user.upload(screen.getByTestId('file-input'), imageFile('captura.png'));
+    await user.type(messageBox(), 'qué ves');
+
+    const chips = await screen.findByRole('list', { name: 'Ficheros adjuntos' });
+    expect(within(chips).getByRole('presentation')).toHaveAttribute(
+      'src',
+      `/api/conversations/${'n'.repeat(32)}/attachments/${'i'.repeat(32)}/content`,
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('b:8b no ve imágenes');
+    expect(screen.getByRole('button', { name: 'Enviar' })).toBeDisabled();
+  });
+
+  it('sends images to a vision model and shows them on the message', async () => {
+    vi.mocked(listModels).mockResolvedValue({
+      models: [{ ...MODELS.models[0], name: 'qwen', vision: true }],
+      default_model: 'qwen',
+    });
+    vi.mocked(uploadAttachment).mockResolvedValue(
+      uploaded('j'.repeat(32), 'reto.png', { kind: 'image', mime: 'image/png' }),
+    );
+    vi.mocked(sendMessage).mockResolvedValue({ model: 'qwen', content: 'veo un puerto' });
+    const { user } = await renderReady();
+
+    await user.upload(screen.getByTestId('file-input'), imageFile('reto.png'));
+    await screen.findByRole('button', { name: 'Quitar reto.png' });
+    await user.type(messageBox(), 'qué ves{Enter}');
+
+    const sent = await screen.findByRole('list', { name: 'Imágenes enviadas' });
+    const image = within(sent).getByRole('img', { name: 'reto.png' });
+    expect(image).toHaveAttribute(
+      'src',
+      `/api/conversations/${'n'.repeat(32)}/attachments/${'j'.repeat(32)}/content`,
+    );
+    expect(image.closest('a')).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('warns that earlier images go to a cloud model with vision', async () => {
+    vi.mocked(listModels).mockResolvedValue({
+      models: [{ ...MODELS.models[0], name: 'groq/scout', remote: true, vision: true }],
+      default_model: 'groq/scout',
+    });
+    vi.mocked(getConversation).mockResolvedValue({
+      ...OLD,
+      messages: [
+        {
+          id: 1,
+          role: 'user',
+          content: 'mira',
+          status: 'done',
+          created_at: OLD.created_at,
+          attachments: [
+            {
+              id: 'k'.repeat(32),
+              filename: 'a.png',
+              kind: 'image',
+              size_bytes: 9,
+              truncated: false,
+            },
+          ],
+        },
+      ],
+    });
+    const { user } = await renderReady();
+
+    await user.click(await screen.findByRole('button', { name: 'Notas de un CTF' }));
+
+    expect(await screen.findByText(/imágenes recientes de esta conversación/)).toBeInTheDocument();
   });
 });

@@ -13,6 +13,8 @@ export interface ModelInfo {
   quantization: string | null;
   /** Runs on a third-party service: messages leave the local network. */
   remote: boolean;
+  /** Accepts images. */
+  vision: boolean;
 }
 
 export interface ModelsResponse {
@@ -70,7 +72,7 @@ export interface ConversationList {
   conversations: Conversation[];
 }
 
-export type AttachmentKind = 'text' | 'pdf';
+export type AttachmentKind = 'text' | 'pdf' | 'image';
 
 /** A file as listed on a stored message. */
 export interface MessageAttachment {

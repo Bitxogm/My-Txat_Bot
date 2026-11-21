@@ -17,6 +17,10 @@ interface ComposerProps {
   onRemoveFile?: (key: string) => void;
   /** Shown above the input when there are files (e.g. they will leave the network). */
   filesNote?: string | null;
+  /** Why sending is not possible right now (e.g. images for a model without vision). */
+  blockReason?: string | null;
+  /** Shown above the input even without files. */
+  notice?: string | null;
 }
 
 export function Composer({
@@ -29,10 +33,12 @@ export function Composer({
   onAttach,
   onRemoveFile,
   filesNote = null,
+  blockReason = null,
+  notice = null,
 }: ComposerProps) {
   const [draft, setDraft] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
-  const canSend = !disabled && !isStreaming && !isUploading && draft.trim() !== '';
+  const canSend = !disabled && !isStreaming && !isUploading && !blockReason && draft.trim() !== '';
   const canAttach = !disabled && !isStreaming && files.length < MAX_ATTACHMENTS;
 
   function submit() {
@@ -72,6 +78,7 @@ export function Composer({
                     filename={file.filename}
                     sizeBytes={file.size_bytes}
                     uploading={file.attachment === null}
+                    previewUrl={file.previewUrl}
                     onRemove={onRemoveFile ? () => onRemoveFile(file.key) : undefined}
                   />
                 </li>
@@ -80,6 +87,12 @@ export function Composer({
             {filesNote && <p className="text-muted-foreground text-xs">{filesNote}</p>}
           </div>
         )}
+        {blockReason && (
+          <p role="alert" className="text-destructive text-xs">
+            {blockReason}
+          </p>
+        )}
+        {notice && <p className="text-muted-foreground text-xs">{notice}</p>}
         <div className="flex items-end gap-2">
           {onAttach && (
             <>
@@ -99,7 +112,7 @@ export function Composer({
                 onClick={() => fileInput.current?.click()}
                 disabled={!canAttach}
                 aria-label="Adjuntar ficheros"
-                title="Adjuntar ficheros (texto o PDF)"
+                title="Adjuntar ficheros (texto, PDF o imágenes)"
               >
                 <PaperclipIcon />
               </Button>

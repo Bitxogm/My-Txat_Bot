@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useRef } from 'react';
 import { ErrorBoundary } from '@/components/error-boundary';
+import { attachmentContentUrl } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { AttachmentChip } from './attachment-chip';
 import type { UiMessage } from './use-chat';
@@ -31,9 +32,12 @@ function noteFor(message: UiMessage): { text: string; isError: boolean } | null 
 export function MessageList({
   messages,
   loading = false,
+  conversationId = null,
 }: {
   messages: UiMessage[];
   loading?: boolean;
+  /** Needed to show image thumbnails. */
+  conversationId?: string | null;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -70,17 +74,45 @@ export function MessageList({
                   message.role === 'user' ? 'items-end' : 'items-start',
                 )}
               >
-                {message.attachments.length > 0 && (
+                {conversationId && message.attachments.some((a) => a.kind === 'image') && (
+                  <ul aria-label="Imágenes enviadas" className="flex flex-wrap justify-end gap-2">
+                    {message.attachments
+                      .filter((a) => a.kind === 'image')
+                      .map((image) => {
+                        const url = attachmentContentUrl(conversationId, image.id);
+                        return (
+                          <li key={image.id}>
+                            <a
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title={`${image.filename} (abrir en otra pestaña)`}
+                            >
+                              <img
+                                src={url}
+                                alt={image.filename}
+                                loading="lazy"
+                                className="bg-muted max-h-40 max-w-60 rounded-lg border object-contain"
+                              />
+                            </a>
+                          </li>
+                        );
+                      })}
+                  </ul>
+                )}
+                {message.attachments.some((a) => a.kind !== 'image' || !conversationId) && (
                   <ul aria-label="Ficheros enviados" className="flex flex-wrap justify-end gap-1.5">
-                    {message.attachments.map((file) => (
-                      <li key={file.id}>
-                        <AttachmentChip
-                          filename={file.filename}
-                          sizeBytes={file.size_bytes}
-                          truncated={file.truncated}
-                        />
-                      </li>
-                    ))}
+                    {message.attachments
+                      .filter((a) => a.kind !== 'image' || !conversationId)
+                      .map((file) => (
+                        <li key={file.id}>
+                          <AttachmentChip
+                            filename={file.filename}
+                            sizeBytes={file.size_bytes}
+                            truncated={file.truncated}
+                          />
+                        </li>
+                      ))}
                   </ul>
                 )}
                 {showBubble && (

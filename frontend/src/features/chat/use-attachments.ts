@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
+  attachmentContentUrl,
   deleteAttachment,
   isAbortError,
   listAttachments,
@@ -15,6 +16,11 @@ export const MAX_ATTACHMENTS = 5;
 /** Extensions the backend accepts (domain/attachment.py); the server still checks the content. */
 export const ACCEPTED_EXTENSIONS = [
   '.pdf',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.webp',
   '.txt',
   '.md',
   '.log',
@@ -60,6 +66,8 @@ export interface PendingFile {
   size_bytes: number;
   /** null while uploading. */
   attachment: Attachment | null;
+  /** Thumbnail address for an uploaded image; null otherwise. */
+  previewUrl: string | null;
 }
 
 export interface UseAttachments {
@@ -75,12 +83,17 @@ export interface UseAttachments {
   clear: () => void;
 }
 
-function fromServer(attachment: Attachment): PendingFile {
+function previewOf(conversationId: string, attachment: Attachment): string | null {
+  return attachment.kind === 'image' ? attachmentContentUrl(conversationId, attachment.id) : null;
+}
+
+function fromServer(conversationId: string, attachment: Attachment): PendingFile {
   return {
     key: attachment.id,
     filename: attachment.filename,
     size_bytes: attachment.size_bytes,
     attachment,
+    previewUrl: previewOf(conversationId, attachment),
   };
 }
 
@@ -124,7 +137,9 @@ export function useAttachments(): UseAttachments {
       try {
         const { attachments } = await listAttachments(conversationId, signal);
         if (signal.aborted) return;
-        const pending = attachments.filter((a) => !a.sent).map(fromServer);
+        const pending = attachments
+          .filter((a) => !a.sent)
+          .map((a) => fromServer(conversationId, a));
         countRef.current = pending.length;
         setFiles(pending);
       } catch (error) {
@@ -148,6 +163,7 @@ export function useAttachments(): UseAttachments {
       filename: file.name,
       size_bytes: file.size,
       attachment: null,
+      previewUrl: null,
     }));
     setFiles((prev) => [...prev, ...placeholders]);
 
@@ -165,6 +181,7 @@ export function useAttachments(): UseAttachments {
                     filename: attachment.filename,
                     size_bytes: attachment.size_bytes,
                     attachment,
+                    previewUrl: previewOf(conversationId, attachment),
                   }
                 : f,
             ),
