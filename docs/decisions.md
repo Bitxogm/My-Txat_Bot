@@ -98,3 +98,16 @@ Registro corto de decisiones de arquitectura. Formato: contexto, decisión, cons
   - El límite de pendientes y el enlace al mensaje son atómicos en SQL: subidas o envíos simultáneos no lo saltan (si un envío pierde la carrera, su turno se deshace).
   - `attachments.message_id` va con `ON DELETE CASCADE`: si algún día se borran mensajes sueltos, sus adjuntos se van con ellos (y hay que borrar sus ficheros) en vez de volver a quedar pendientes.
 
+## ADR-016: Imágenes para modelos con visión
+- **Contexto**: capturas de terminal, de webs o de retos son habituales en un CTF. Algunos modelos locales (qwen3.5) y de la nube (Llama 4 en Groq) aceptan imágenes; otros no.
+- **Decisión**:
+  - PNG, JPEG, GIF y WebP, detectados por su magic number, se aceptan como adjuntos (`kind: "image"`), con los mismos límites que el resto (ADR-015).
+  - Nunca se guarda ni se reenvía la imagen subida tal cual: Pillow la decodifica en el proceso aislado (`adapters/files/isolated.py`, el mismo que los PDF, sin variables de entorno para que no tenga secretos en memoria), rechaza más de 40 MP (bombas de descompresión), toma el primer fotograma, la reduce a 1568 px como máximo y copia los píxeles a una imagen nueva, así que no sobrevive ningún metadato (EXIF, GPS, ICC, comentarios). PNG si tiene transparencia o venía sin pérdida (capturas: texto legible) y ocupa menos de 2 MB; JPEG si no.
+  - `Image.open` solo usa el decodificador que anuncia el magic number: si no, cuando ese falla, Pillow prueba otros (TGA, PCD, SPIDER…) poco auditados.
+  - Qué modelos ven: Ollama lo dice en `/api/show` (`capabilities: ["vision"]`, en caché por digest); la nube no lo dice, así que va en `CLOUD_VISION_MODELS`. `/api/models` devuelve `vision`. Enviar imágenes a un modelo sin visión → 400 `MODEL_WITHOUT_VISION` (no se guarda el turno).
+  - Las imágenes viajan como imágenes (Ollama: `images` en base64; API compatible con OpenAI: partes `image_url` con `data:`), dentro del mensaje del usuario. En el texto solo aparece `<fichero nombre="…" tipo="imagen"/>` y el aviso de que lo que se vea en ellas son datos.
+  - En cada turno se reenvían solo las 4 imágenes más recientes de la conversación, y ninguna si el modelo actual no tiene visión (se puede cambiar a un modelo de texto a mitad de conversación).
+  - `GET …/attachments/{id}/content` sirve la imagen normalizada para las miniaturas, con tipo fijo, `nosniff`, CSP `sandbox`, `Cross-Origin-Resource-Policy: same-origin` y `Cache-Control: private, no-cache` (tras cerrar sesión o borrar, el navegador no la enseña de su caché). Solo imágenes: los textos y PDF no se vuelven a servir.
+  - `CLOUD_MODELS` es una lista blanca también para chatear y para la visión: un modelo fuera de ella da 404 aunque el cliente lo pida por nombre.
+- **Consecuencias**: el texto que aparece en una imagen puede llevar instrucciones y no se puede limpiar como el de un fichero; solo queda el aviso y la capa base (ADR-013). Los modelos pequeños leen bien capturas limpias, pero se equivocan con texto fino: para salidas largas, mejor adjuntar el texto. Con modelos en la nube, la imagen sale de la red (ADR-012); al cambiar a uno remoto con visión se envían también las imágenes recientes de turnos anteriores. El proceso aislado limita memoria y tiempo, pero no es un sandbox de seguridad: mismo usuario y mismos ficheros que el backend.
+
