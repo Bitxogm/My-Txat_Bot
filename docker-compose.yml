@@ -23,7 +23,7 @@ services:
     read_only: true
     tmpfs:
       # Starlette spools multipart uploads (up to UPLOAD_MAX_MB) here.
-      - /tmp:size=64m,mode=1777,noexec,nosuid,nodev
+      - /tmp:size=128m,mode=1777,noexec,nosuid,nodev
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     # Second barrier over the 1 GB RLIMIT_AS of the parser child (adapters/files/isolated.py).
@@ -49,7 +49,7 @@ services:
     read_only: true
     tmpfs:
       # nginx-unprivileged keeps its pid file and proxy/body buffers in /tmp.
-      - /tmp:size=64m,mode=1777,noexec,nosuid,nodev
+      - /tmp:size=128m,mode=1777,noexec,nosuid,nodev
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     mem_limit: 256m
