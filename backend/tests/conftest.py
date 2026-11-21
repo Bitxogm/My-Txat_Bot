@@ -1,4 +1,5 @@
 from collections.abc import AsyncIterator, Callable, Sequence
+from pathlib import Path
 
 import aiosqlite
 import httpx
@@ -6,6 +7,8 @@ import pytest
 from argon2 import PasswordHasher
 from fastapi import FastAPI
 
+from app.adapters.files.local_storage import LocalFileStorage
+from app.adapters.sqlite.attachments import SqliteAttachmentRepository
 from app.adapters.sqlite.conversations import SqliteConversationRepository
 from app.adapters.sqlite.database import connect
 from app.adapters.sqlite.osint_sources import SqliteOsintSourceRepository
@@ -115,6 +118,8 @@ def app(
     repo: SqliteConversationRepository,
     personality_repo: SqlitePersonalityRepository,
     osint_repo: SqliteOsintSourceRepository,
+    db: aiosqlite.Connection,
+    tmp_path: Path,
 ) -> FastAPI:
     # ASGITransport doesn't run the lifespan, so wire what it would have created.
     application = create_app(make_settings())
@@ -122,6 +127,8 @@ def app(
     application.state.conversations = repo
     application.state.personalities = personality_repo
     application.state.osint_sources = osint_repo
+    application.state.attachments = SqliteAttachmentRepository(db)
+    application.state.file_storage = LocalFileStorage(tmp_path / "uploads")
     return application
 
 

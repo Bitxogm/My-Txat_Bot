@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
 
     upload_max_mb: int = Field(default=20, gt=0)
+    # Where uploaded files are stored (a Docker volume in production: ./data -> /app/data).
+    upload_dir: str = "./data/uploads"
+
+    @property
+    def upload_max_bytes(self) -> int:
+        return self.upload_max_mb * 1024 * 1024
 
     @property
     def cors_origin_list(self) -> list[str]:

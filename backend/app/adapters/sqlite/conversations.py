@@ -145,3 +145,10 @@ class SqliteConversationRepository:
             status=status,
             created_at=datetime.fromisoformat(now),
         )
+
+    async def delete_message(self, conversation_id: str, message_id: int) -> None:
+        await self._db.execute(
+            "DELETE FROM messages WHERE id = ? AND conversation_id = ?",
+            (message_id, conversation_id),
+        )
+        await self._db.commit()

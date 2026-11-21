@@ -4,7 +4,9 @@ from fastapi import Cookie, Depends, Request
 
 from app.core.auth import SESSION_COOKIE, AuthService, Session
 from app.core.config import Settings
+from app.ports.attachments import AttachmentRepository
 from app.ports.conversations import ConversationRepository
+from app.ports.file_storage import FileStorage
 from app.ports.llm import LLMProvider
 from app.ports.osint_sources import OsintSourceRepository
 from app.ports.personalities import PersonalityRepository
@@ -33,6 +35,16 @@ def get_personality_repository(request: Request) -> PersonalityRepository:
 def get_osint_source_repository(request: Request) -> OsintSourceRepository:
     repository: OsintSourceRepository = request.app.state.osint_sources
     return repository
+
+
+def get_attachment_repository(request: Request) -> AttachmentRepository:
+    repository: AttachmentRepository = request.app.state.attachments
+    return repository
+
+
+def get_file_storage(request: Request) -> FileStorage:
+    storage: FileStorage = request.app.state.file_storage
+    return storage
 
 
 def get_auth_service(request: Request) -> AuthService:

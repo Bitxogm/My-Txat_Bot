@@ -79,3 +79,22 @@ Registro corto de decisiones de arquitectura. Formato: contexto, decisión, cons
   - Las copias del Auditor no reciben el catálogo (se identifica por id).
   - `requires_payment` es booleano: las fuentes freemium van con `false` y "Freemium" en la descripción.
   - Las migraciones siguen en `adapters/sqlite/database.py` (lista `MIGRATIONS`), no en una carpeta aparte.
+
+## ADR-015: Ficheros adjuntos como datos en el mensaje del usuario
+- **Contexto**: para analizar salidas de nmap, logs, código o informes en PDF hay que poder adjuntarlos a una conversación, sin abrir una vía de inyección de prompt ni de escritura arbitraria en disco.
+- **Decisión**:
+  - Subida en dos pasos: `POST /api/conversations/{id}/attachments` (multipart, campo `file`) guarda el fichero como **pendiente**; al enviar el mensaje se pasan sus ids en `attachment_ids` (máx. 5) y quedan ligados a ese mensaje. Un adjunto enviado no se reutiliza ni se borra suelto; se borra con su conversación.
+  - Tipo decidido por el **contenido**: PDF si empieza por `%PDF-`; texto si la extensión está en la lista blanca (`domain/attachment.py`) y el contenido es UTF-8 sin NUL. Lo demás, 415. El MIME del cliente se ignora. Las imágenes (modelos con visión) van en un paso aparte.
+  - El fichero se guarda en `UPLOAD_DIR` con una clave uuid generada en el servidor (permisos 600, `O_EXCL|O_NOFOLLOW`); el nombre original solo se muestra, saneado. El texto extraído (máx. 200.000 caracteres) se guarda en la tabla `attachments` (migración v4) para no reprocesar el fichero en cada turno.
+  - PDF con pypdf (puro Python) en un **proceso aparte** (uno a la vez, 1 GB de memoria como máximo) que se mata a los 20 s: un hilo no se puede parar y un PDF hostil se quedaría consumiendo CPU. Máximo 50 páginas. Cifrados, dañados o sin texto (escaneos) → 422 `UNREADABLE_FILE`.
+  - El texto se normaliza (NFKC) y se le quitan los caracteres invisibles (formato, bidi, ancho cero, etiquetas Unicode, uso privado) y de control: podrían llevar instrucciones que el usuario no ve.
+  - Las subidas sin `Content-Length` (chunked) se rechazan con 411: Starlette vuelca el multipart entero a disco antes de que el handler pueda contarlo.
+  - Al modelo le llega dentro del mensaje `user`, nunca en el system prompt: una línea que dice que el contenido son datos, un bloque `<fichero nombre tipo recortado>` por adjunto (máx. 12.000 caracteres cada uno, con `</fichero` escapado) y al final el texto del usuario.
+- **Consecuencias**:
+  - Delimitar no garantiza que un modelo pequeño ignore instrucciones escondidas en un fichero; la capa base (ADR-013) lo refuerza. Revisar lo que sugiera tras analizar un fichero ajeno.
+  - Con modelos en la nube el contenido del fichero sale de la red (ADR-012).
+  - Los ficheros largos se recortan para el modelo (contexto de ~8k tokens en local) y se marca `recortado="sí"`.
+  - Un adjunto pendiente que nunca se envía queda en disco hasta que se borra la conversación o se quita desde la UI. Al arrancar se borran los ficheros sin fila en `attachments` (caída entre guardar e insertar, borrado fallido).
+  - El límite de pendientes y el enlace al mensaje son atómicos en SQL: subidas o envíos simultáneos no lo saltan (si un envío pierde la carrera, su turno se deshace).
+  - `attachments.message_id` va con `ON DELETE CASCADE`: si algún día se borran mensajes sueltos, sus adjuntos se van con ellos (y hay que borrar sus ficheros) en vez de volver a quedar pendientes.
+
