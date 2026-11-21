@@ -2,7 +2,9 @@ import path from 'node:path';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { loadEnv } from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
 import { defineConfig } from 'vitest/config';
+import { pwaOptions } from './src/pwa/options.ts';
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 
@@ -35,7 +37,7 @@ export default defineConfig(({ command, mode }) => {
   const backendUrl = env.VITE_DEV_BACKEND_URL || 'http://localhost:8000';
 
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), VitePWA(pwaOptions)],
     define: { __DEV_LOGIN__: devLoginDefine(command, mode, env) },
     resolve: {
       alias: { '@': path.resolve(import.meta.dirname, './src') },

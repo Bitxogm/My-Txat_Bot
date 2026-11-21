@@ -20,7 +20,10 @@ vi.mock('@/lib/notify-error', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/notify-error')>();
   return { notifyError: vi.fn(actual.notifyError) };
 });
+import { clearRuntimeCaches } from '@/pwa/caches';
 import App from './App';
+
+vi.mock('@/pwa/caches', () => ({ clearRuntimeCaches: vi.fn(async () => undefined) }));
 
 vi.mock('@/lib/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api')>()),
@@ -140,6 +143,36 @@ describe('App auth flow', () => {
 
     expect(await screen.findByRole('button', { name: 'Entrar' })).toBeInTheDocument();
     expect(logout).toHaveBeenCalledOnce();
+    expect(clearRuntimeCaches).toHaveBeenCalledOnce();
+  });
+
+  it('shows the offline screen instead of stale data and retries', async () => {
+    vi.mocked(getMe)
+      .mockRejectedValueOnce(apiError('network', null, 'NETWORK_ERROR', 'Sin conexión'))
+      .mockResolvedValueOnce({ username: 'void' });
+    const user = userEvent.setup();
+    render(<App />);
+
+    expect(await screen.findByText('Sin conexión con el servidor')).toBeInTheDocument();
+    expect(notifyError).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+
+    expect(await screen.findByRole('textbox', { name: 'Mensaje' })).toBeInTheDocument();
+  });
+
+  it('retries by itself when the network comes back, and treats 502 as offline', async () => {
+    vi.mocked(getMe)
+      .mockRejectedValueOnce(apiError('server', 502, 'HTTP_502', 'Error del servidor'))
+      .mockResolvedValueOnce({ username: 'void' });
+    render(<App />);
+    await screen.findByText('Sin conexión con el servidor');
+
+    act(() => {
+      window.dispatchEvent(new Event('online'));
+    });
+
+    expect(await screen.findByRole('textbox', { name: 'Mensaje' })).toBeInTheDocument();
   });
 
   it('stays logged in and warns when logout fails on the server', async () => {
