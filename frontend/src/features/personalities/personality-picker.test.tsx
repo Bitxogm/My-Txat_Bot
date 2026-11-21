@@ -29,6 +29,7 @@ const MODELS: ModelInfo[] = [
     parameter_size: null,
     quantization: null,
     remote: true,
+    vision: false,
   },
 ];
 

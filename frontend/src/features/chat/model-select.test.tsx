@@ -3,8 +3,16 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ModelInfo } from '@/lib/api';
 import { ModelSelect } from './model-select';
 
-function model(name: string, remote: boolean): ModelInfo {
-  return { name, size_bytes: 0, family: null, parameter_size: null, quantization: null, remote };
+function model(name: string, remote: boolean, vision = false): ModelInfo {
+  return {
+    name,
+    size_bytes: 0,
+    family: null,
+    parameter_size: null,
+    quantization: null,
+    remote,
+    vision,
+  };
 }
 
 describe('ModelSelect', () => {
@@ -39,5 +47,20 @@ describe('ModelSelect', () => {
     );
 
     expect(screen.queryByRole('group', { name: /Nube/ })).not.toBeInTheDocument();
+  });
+
+  it('marks the models that can see images', () => {
+    render(
+      <ModelSelect
+        models={[model('qwen3.5:9b', false, true), model('llama3', false)]}
+        value="qwen3.5:9b"
+        onChange={vi.fn()}
+        status="ready"
+        onReload={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('option', { name: 'qwen3.5:9b · ve imágenes' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'llama3' })).toBeInTheDocument();
   });
 });
