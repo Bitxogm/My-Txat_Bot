@@ -19,6 +19,16 @@ services:
       - ./backend/.env
     volumes:
       - ./data:/app/data
+    # Hardening (docs/security.md): the PDF/image parser child shares this user and filesystem.
+    read_only: true
+    tmpfs:
+      # Starlette spools multipart uploads (up to UPLOAD_MAX_MB) here.
+      - /tmp:size=64m,mode=1777,noexec,nosuid,nodev
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    # Second barrier over the 1 GB RLIMIT_AS of the parser child (adapters/files/isolated.py).
+    mem_limit: 2g
+    pids_limit: 128
     ports:
       - "${BIND_ADDR:-127.0.0.1}:${BACKEND_PORT:-8000}:8000"
     healthcheck:
@@ -36,6 +46,14 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    read_only: true
+    tmpfs:
+      # nginx-unprivileged keeps its pid file and proxy/body buffers in /tmp.
+      - /tmp:size=64m,mode=1777,noexec,nosuid,nodev
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    pids_limit: 64
     ports:
       - "${BIND_ADDR:-127.0.0.1}:${FRONTEND_PORT:-5173}:8080"
     healthcheck:

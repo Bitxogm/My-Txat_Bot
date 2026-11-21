@@ -53,6 +53,13 @@
 - El contenido llega al modelo como datos delimitados en el mensaje del usuario; un fichero no puede cerrar su propio bloque. Sigue siendo una barrera de prompt: un fichero ajeno puede llevar instrucciones escondidas.
 - Los ficheros se borran del disco al borrar su conversación; los huérfanos, al arrancar. Carpeta 700, ficheros 600.
 
+## Contenedores
+El proceso que parsea PDF e imágenes comparte usuario y sistema de ficheros con el backend, así que el contenedor es la siguiente barrera (`docker-compose.yml`):
+- `backend` y `frontend` corren sin root, con `cap_drop: [ALL]` y `no-new-privileges` (un binario setuid no da privilegios).
+- Sistema de ficheros raíz de solo lectura (`read_only`): un fichero malicioso no puede tocar el código ni la configuración. Solo se escribe en `/app/data` (volumen: SQLite y uploads) y en `/tmp`, un tmpfs de 64 MB con `noexec,nosuid,nodev` (Starlette vuelca ahí las subidas de más de 1 MB; nginx, su pid y sus búferes).
+- `mem_limit` (2 GB backend, 256 MB frontend) y `pids_limit`: segunda barrera sobre el `RLIMIT_AS` de 1 GB del proceso aislado. El tmpfs cuenta dentro del límite de memoria.
+- Si una dependencia nueva necesita escribir fuera de esas rutas, falla con `Read-only file system`: añadir un tmpfs concreto, no quitar `read_only`.
+
 ## Asistente de Kali
 - El modelo puede sugerir comandos, pero **nunca se ejecuta nada sin confirmación explícita** del usuario.
 - Pensado solo para máquinas propias o con autorización (labs, CTF).
