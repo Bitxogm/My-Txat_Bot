@@ -286,3 +286,59 @@ async def test_ollama_models_shadowed_by_a_provider_are_hidden(
 
     assert names == ["hf.co/user/model", "qwen3.5:9b"]
     assert "mannix" in caplog.text
+
+
+# --- reasoning models (LM Studio with Qwen3.x) -------------------------------------------------
+
+
+def test_reasoning_effort_is_read_per_provider() -> None:
+    [lmstudio] = make_settings(
+        providers="lmstudio",
+        provider_variables={**LMSTUDIO, "provider_lmstudio_reasoning_effort": "None"},
+    ).provider_list
+
+    assert lmstudio.reasoning_effort == "none"
+
+
+@pytest.mark.parametrize(("effort", "sent"), [("none", "none"), ("", None)])
+async def test_reasoning_effort_is_sent_only_when_set(effort: str, sent: str | None) -> None:
+    import json
+
+    seen: list[dict[str, object]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content))
+        return httpx.Response(
+            200, content=b'data: {"choices":[{"delta":{"content":"4"}}]}\n\ndata: [DONE]\n\n'
+        )
+
+    provider = OpenAICompatibleProvider(
+        httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://l/v1"),
+        "lmstudio",
+        local=True,
+        reasoning_effort=effort,
+    )
+
+    [c async for c in provider.stream_chat("q", [ChatMessage(role="user", content="2+2")])]
+
+    assert seen[0].get("reasoning_effort") == sent
+
+
+async def test_reasoning_content_never_leaks_into_the_reply() -> None:
+    body = (
+        b'data: {"choices":[{"delta":{"role":"assistant","reasoning_content":"Pienso"}}]}\n\n'
+        b'data: {"choices":[{"delta":{"content":"cuatro"}}]}\n\n'
+        b"data: [DONE]\n\n"
+    )
+    provider = OpenAICompatibleProvider(
+        httpx.AsyncClient(
+            transport=httpx.MockTransport(lambda _: httpx.Response(200, content=body)),
+            base_url="http://l/v1",
+        ),
+        "lmstudio",
+        local=True,
+    )
+
+    reply = [c async for c in provider.stream_chat("q", [ChatMessage(role="user", content="?")])]
+
+    assert reply == ["cuatro"]
