@@ -115,6 +115,8 @@ Requiere sesión (401 sin cookie válida). `/api/chat` es la variante sin estado
 - Comprobaciones automáticas por pregunta: `must_any` (cada grupo de regex debe aparecer) y `must_not` (ninguno), más la global de idioma (en español). `warn` (por pregunta) y los emojis (global) solo salen como avisos en el informe, no suspenden.
 - Junto a cada informe `.md` se guarda un `.json` con las respuestas en bruto. `eval --recheck <informe>` las vuelve a corregir con las reglas actuales sin llamar al modelo (los informes antiguos sin JSON se leen del propio `.md`). Con `--personality`, el nombre del informe lleva la personalidad.
 - Las que piden juicio (trampas, Mentor, límites) salen como "REVISIÓN MANUAL".
+- `--models` acepta modelos de cualquier proveedor (`lmstudio/<id>`, `groq/<id>`…); `--list-models` da los ids exactos. Un modelo no disponible se omite con un aviso. Cada informe registra el proveedor, si es local y la huella de la capa base (`BASE_PROMPT_VERSION`).
+- Las tablas resumen se versionan en [evals.md](evals.md), que se actualiza en cada PR que mida.
 - No va en la CI (necesita modelos); el corrector tiene tests unitarios.
 
 ## Frontend
