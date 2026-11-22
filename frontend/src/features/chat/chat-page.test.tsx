@@ -49,6 +49,7 @@ const MODELS: ModelsResponse = {
       quantization: 'Q4_K_M',
       remote: false,
       vision: false,
+      provider: 'ollama',
     },
     {
       name: 'b:8b',
@@ -58,6 +59,7 @@ const MODELS: ModelsResponse = {
       quantization: null,
       remote: false,
       vision: false,
+      provider: 'ollama',
     },
   ],
   default_model: 'b:8b',

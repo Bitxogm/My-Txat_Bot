@@ -15,6 +15,8 @@ export interface ModelInfo {
   remote: boolean;
   /** Accepts images. */
   vision: boolean;
+  /** "ollama" or the name of an OpenAI-compatible provider (groq, lmstudio...). */
+  provider: string;
 }
 
 export interface ModelsResponse {

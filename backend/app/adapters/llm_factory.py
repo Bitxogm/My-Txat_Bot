@@ -24,32 +24,34 @@ def build_llm_provider(
     settings: Settings, think: bool | None = None
 ) -> tuple[RoutingLLMProvider, list[httpx.AsyncClient]]:
     """The provider and the HTTP clients the caller must close. `think` overrides OLLAMA_THINK."""
-    client = build_ollama_client(settings.ollama_base_url, settings.ollama_timeout_seconds)
-    clients = [client]
+    ollama_client = build_ollama_client(settings.ollama_base_url, settings.ollama_timeout_seconds)
+    clients = [ollama_client]
     chat_timeout = build_chat_timeout(
         settings.ollama_timeout_seconds, settings.ollama_chat_read_timeout_seconds
     )
     ollama = OllamaProvider(
-        client, chat_timeout, think=settings.ollama_think if think is None else think
+        ollama_client, chat_timeout, think=settings.ollama_think if think is None else think
     )
+    for warning in settings.config_warnings:
+        logger.warning("%s", warning)
     remotes: list[OpenAICompatibleProvider] = []
-    if settings.cloud_enabled:
-        cloud_client = build_openai_compatible_client(
-            settings.cloud_base_url,
-            settings.cloud_api_key.get_secret_value(),
-            settings.cloud_timeout_seconds,
+    for config in settings.provider_list:
+        client = build_openai_compatible_client(
+            config.base_url, config.api_key.get_secret_value(), settings.provider_timeout_seconds
         )
-        clients.append(cloud_client)
+        clients.append(client)
         remotes.append(
             OpenAICompatibleProvider(
-                cloud_client,
-                settings.cloud_name,
-                allowed_models=settings.cloud_model_list,
-                vision_models=settings.cloud_vision_model_list,
+                client,
+                config.name,
+                allowed_models=config.models,
+                vision_models=config.vision_models,
                 chat_timeout=build_chat_timeout(
-                    settings.cloud_timeout_seconds, settings.ollama_chat_read_timeout_seconds
+                    settings.provider_timeout_seconds, settings.ollama_chat_read_timeout_seconds
                 ),
+                local=config.local,
+                key_variable=config.key_variable,
             )
         )
-        logger.info("Cloud provider enabled: %s", settings.cloud_name)
+        logger.info("Provider enabled: %s (%s)", config.name, "local" if config.local else "remote")
     return RoutingLLMProvider(ollama, remotes), clients

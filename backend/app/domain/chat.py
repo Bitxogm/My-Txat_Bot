@@ -28,5 +28,7 @@ class ModelInfo:
     quantization: str | None = None
     # True when the model runs on a third-party service: messages leave the local network.
     remote: bool = False
-    # Accepts images (Ollama "vision" capability, or CLOUD_VISION_MODELS for the cloud).
+    # Accepts images (Ollama "vision" capability, or PROVIDER_<NAME>_VISION_MODELS).
     vision: bool = False
+    # Where it runs: "ollama" or the name of an OpenAI-compatible provider (ADR-019).
+    provider: str = "ollama"

@@ -185,10 +185,11 @@ def run_evals(
         runs: list[tuple[str, bool | None, list[Result]]] = []
         try:
             for model in models:
-                remote = settings.cloud_enabled and model.startswith(f"{settings.cloud_name}/")
+                # Reasoning (--think) is an Ollama option: other providers don't take it.
+                not_ollama = settings.provider_for(model) is not None
                 model_think = (
                     None
-                    if remote
+                    if not_ollama
                     else (settings.ollama_think if think_flag is None else think_flag)
                 )
                 results: list[Result] = []
