@@ -33,8 +33,10 @@
 - Ficheros adjuntos (ADR-015): su contenido va en el mensaje `user` delimitado como datos, nunca dentro del `system`.
 - Catálogo OSINT (ADR-014): sus textos entran en el system prompt del Auditor, así que se validan al guardar (una línea, sin `<>`, backticks ni caracteres de control; URL `http(s)` sin credenciales) y se limpian otra vez al componer el prompt, dentro de un bloque marcado como datos de referencia.
 
-## Modelos en la nube
-- Opcionales (`CLOUD_API_KEY` en `backend/.env`, ADR-012). Lo que se escribe en una conversación con un modelo del grupo "Nube" sale de la red hacia el proveedor (Groq por defecto); los modelos locales no.
+## Modelos en la nube y otros proveedores
+- Opcionales (`PROVIDERS` + `PROVIDER_<NOMBRE>_*` en `backend/.env`, ADR-019; `CLOUD_*` obsoleto). Lo que se escribe en una conversación con un modelo del grupo "Nube" sale de la red hacia el proveedor (p. ej. Groq); los modelos locales no.
+- `PROVIDER_<NOMBRE>_LOCAL=true` solo para servidores en esta misma máquina o la red propia (LM Studio, llama.cpp): quita los avisos de "sale de tu red". El backend no arranca si la URL de un proveedor `_LOCAL` es un host público, ni si una clave iría por `http` a internet.
+- Cada proveedor tiene su propia clave (`PROVIDER_<NOMBRE>_API_KEY`, `SecretStr`), solo en la cabecera `Authorization` de su cliente; sin clave no se envía la cabecera. Nunca se loguea ni sale en los mensajes de error (solo el nombre de la variable que hay que revisar).
 - La clave va como `SecretStr`, solo en la cabecera `Authorization` del cliente HTTP del adaptador, y nunca se loguea (los errores del proveedor se registran sin cabeceras).
 - No usar modelos en la nube para datos sensibles de un cliente o de un pentest real: para eso, modelos locales.
 

@@ -34,7 +34,16 @@ class RoutingLLMProvider:
         models: list[ModelInfo] = []
         errors: list[AppError] = []
         try:
-            models.extend(await self._local.list_models())
+            for model in await self._local.list_models():
+                prefix, sep, _ = model.name.partition("/")
+                if sep and prefix in self._remotes:
+                    # "user/model" in Ollama would be routed to the provider named "user": hide
+                    # it rather than send a conversation somewhere the selector doesn't show.
+                    logger.warning(
+                        "Ollama model hidden: its namespace %r is also a provider name", prefix
+                    )
+                    continue
+                models.append(model)
         except AppError as exc:
             logger.warning("Local models unavailable: %s", exc.code)
             errors.append(exc)

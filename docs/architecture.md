@@ -12,7 +12,7 @@ frontend (Vite build servido por nginx)
 backend (FastAPI) ──── SQLite (data/txatbot.db) + uploads (data/uploads/)
    │    │           └── ChromaDB (futuro, RAG)
    │    │  HTTPS (opcional, sale de la red)
-   │    └──────────▶ proveedor en la nube compatible con OpenAI (Groq)
+   │    └──────────▶ proveedores compatibles con OpenAI (Groq en la nube, LM Studio local…)
    │  HTTP, Tailscale
    ▼
 Ollama (máquina con GPU, puerto 11434)
@@ -21,7 +21,7 @@ Ollama (máquina con GPU, puerto 11434)
 - **frontend**: SPA React. Todo acceso a la API pasa por un único cliente (`src/lib/api`).
 - **backend**: FastAPI asíncrono. Orquesta conversaciones, personalidades, ficheros y llamadas al modelo.
 - **Ollama**: servicio aparte. Por defecto remoto (Acer con RTX 3060 vía Tailscale). Opcionalmente en el mismo Compose con el perfil `ollama`.
-- **Nube (opcional)**: proveedor compatible con OpenAI (Groq por defecto, ADR-012). Solo con `CLOUD_API_KEY`.
+- **Proveedores compatibles con OpenAI (opcionales, ADR-019)**: los de `PROVIDERS`, cada uno con su `PROVIDER_<NOMBRE>_*`. Remotos (Groq) o locales (`_LOCAL=true`: LM Studio, llama.cpp).
 - **Datos**: SQLite en `data/`, montado como volumen. Uploads en `data/uploads/`.
 
 ## Backend
@@ -41,7 +41,7 @@ backend/app/
                      files (almacenamiento local, proceso aislado, PDF, imágenes)
 ```
 
-- El modelo no está acoplado: `LLMProvider` define el contrato; `OllamaProvider` (local) y `OpenAICompatibleProvider` (Groq u otro, opcional) lo implementan, y `RoutingLLMProvider` los junta en una sola lista de modelos (los remotos con prefijo `<CLOUD_NAME>/`).
+- El modelo no está acoplado: `LLMProvider` define el contrato; `OllamaProvider` (local) y `OpenAICompatibleProvider` (uno por proveedor de `PROVIDERS`) lo implementan, y `RoutingLLMProvider` los junta en una sola lista de modelos (los de cada proveedor con el prefijo `<nombre>/`). La configuración se lee en `core/config.py` (`Settings.provider_list`) y la fábrica está en `adapters/llm_factory.py`.
 - Acceso a datos con repository pattern.
 
 ## Autenticación
@@ -82,7 +82,7 @@ Requieren sesión. Persisten en SQLite (`data/txatbot.db`) vía `ConversationRep
 - `PATCH /api/conversations/{id}` `{ title }` · `DELETE /api/conversations/{id}` → 204.
 - `POST /api/conversations/{id}/messages` `{ content, model?, attachment_ids? }` → mismo SSE que `/api/chat`. El servidor guarda el mensaje del usuario, antepone el system prompt compuesto (base + snapshot de la personalidad), construye el historial desde la base de datos y guarda la respuesta como `done`, `stopped` (el cliente cortó) o `error` (con el texto parcial). El primer mensaje da el título.
 - Los turnos con error y las respuestas vacías no se reenvían al modelo.
-- Ajuste al contexto (ADR-018, `domain/context.py`): antes de guardar nada, el historial se recorta para caber en el contexto del modelo (`num_ctx` de la personalidad, si no `OLLAMA_NUM_CTX`; `CLOUD_CONTEXT_TOKENS` en la nube), dejando sitio para la respuesta. Se conservan los turnos más nuevos; los antiguos pierden primero las imágenes, luego el contenido de sus ficheros y, al final, desaparecen, y el modelo recibe una nota de cuántos se omitieron. Si ni el mensaje nuevo cabe (con sus ficheros recortados) → 400 `CONTEXT_TOO_LONG`, sin guardarlo. `/api/chat` se ajusta igual.
+- Ajuste al contexto (ADR-018, `domain/context.py`): antes de guardar nada, el historial se recorta para caber en el contexto del modelo (`num_ctx` de la personalidad, si no `OLLAMA_NUM_CTX`; `PROVIDER_<NOMBRE>_CONTEXT_TOKENS` en los proveedores compatibles con OpenAI), dejando sitio para la respuesta. Se conservan los turnos más nuevos; los antiguos pierden primero las imágenes, luego el contenido de sus ficheros y, al final, desaparecen, y el modelo recibe una nota de cuántos se omitieron. Si ni el mensaje nuevo cabe (con sus ficheros recortados) → 400 `CONTEXT_TOO_LONG`, sin guardarlo. `/api/chat` se ajusta igual.
 
 ## Ficheros adjuntos (ADR-015, ADR-016)
 
@@ -99,7 +99,7 @@ Requieren sesión. Tabla `attachments` (migración v4); el fichero en `UPLOAD_DI
 
 Requiere sesión (401 sin cookie válida). `/api/chat` es la variante sin estado (el cliente manda todo el historial y no se guarda nada).
 
-- `GET /api/models`: modelos de Ollama y, si hay `CLOUD_API_KEY`, los del proveedor en la nube (`name`, `size_bytes`, `family`, `parameter_size`, `quantization`, `remote`, `vision`) y `default_model`. Si un proveedor falla, se devuelven los del otro.
+- `GET /api/models`: modelos de Ollama y de cada proveedor de `PROVIDERS` (`name`, `size_bytes`, `family`, `parameter_size`, `quantization`, `remote`, `vision`, `provider`) y `default_model`. `remote` es `false` en Ollama y en los proveedores con `_LOCAL=true`. Si un proveedor falla, se devuelven los demás.
 - `POST /api/chat` con `{ "model"?: string, "messages": [{ "role": "system"|"user"|"assistant", "content": string }] }`. Si no se indica `model` se usa `DEFAULT_MODEL`.
 - Respuesta `text/event-stream`:
   - `event: token` / `data: {"content": "..."}` por cada fragmento.

@@ -49,7 +49,7 @@ Registro corto de decisiones de arquitectura. Formato: contexto, decisión, cons
 - **Motivo**: el historial no depende de lo que mande el navegador y la respuesta se guarda aunque el cliente corte (se marca `stopped`).
 - **Consecuencias**: una sola conexión aiosqlite en modo WAL (un usuario). Para hacer backup en caliente no basta con copiar `txatbot.db`: hay que copiar también `-wal` o usar `sqlite3 data/txatbot.db ".backup copia.db"`.
 
-## ADR-012: Modelos híbridos, local + nube gratuita (Groq)
+## ADR-012: Modelos híbridos, local + nube gratuita (Groq) (matizada por ADR-019)
 - **Contexto**: los modelos que caben en la GPU (≈9B en la GTX 1070, ≈14B en la RTX 3060) inventan flags y rutas en comandos de pentesting. La API de Claude es de pago y Gemini rechaza demasiadas consultas legítimas de CTF.
 - **Decisión**: además de Ollama, un proveedor opcional con API compatible con OpenAI (`CLOUD_*` en `backend/.env`), por defecto Groq en su plan gratuito (modelos de 70-120B). `RoutingLLMProvider` junta los dos detrás de `LLMProvider`; los modelos remotos se llaman `<CLOUD_NAME>/<id>` y el selector los separa en el grupo "Nube".
 - **Consecuencias**: lo escrito a un modelo en la nube sale de la red y queda sujeto a las condiciones del proveedor; los locales siguen igual (ADR-001). Sin `CLOUD_API_KEY` todo es local. Cambiar de proveedor (OpenRouter, Cerebras) es solo configuración. Los límites del plan gratuito (≈1.000 peticiones/día por modelo) se notan como 429 `MODEL_RATE_LIMITED`.
@@ -130,4 +130,15 @@ Registro corto de decisiones de arquitectura. Formato: contexto, decisión, cons
   - Estimación sin tokenizador: 3 caracteres por token (por encima de lo real en español) e imágenes por su tamaño en teselas de 28 px.
   - Si aun así el modelo dice que no cabe, el error es `CONTEXT_TOO_LONG` (400) con un mensaje claro, no `MODEL_UNAVAILABLE`.
 - **Consecuencias**: las conversaciones largas nunca se rompen, pero el modelo "olvida" lo más antiguo; la memoria de la Fase 3 servirá para que lo importante no dependa del historial. Subir `OLLAMA_NUM_CTX` da más memoria a costa de VRAM y velocidad.
+
+## ADR-019: Varios proveedores compatibles con OpenAI
+- **Contexto**: el hueco único `CLOUD_*` (ADR-012) solo admitía un proveedor y lo trataba siempre como remoto. Hace falta tener a la vez Groq (nube) y LM Studio (en esta máquina, con modelos que no caben en Ollama), y que lo local no muestre avisos de "sale de tu red". Además, el presupuesto de 32768 tokens para Groq chocaba con su límite gratuito de ~8000 tokens por minuto.
+- **Decisión**:
+  - `PROVIDERS=groq,lmstudio` y, por cada uno, `PROVIDER_<NOMBRE>_BASE_URL` (obligatoria), `_API_KEY` (opcional: sin ella no se envía `Authorization`), `_MODELS` (lista permitida), `_VISION_MODELS`, `_CONTEXT_TOKENS` (6000 por defecto) y `_LOCAL`.
+  - Nombres en minúsculas y dígitos (van en nombres de variable), distintos de `ollama`; repetidos o sin `BASE_URL` → el backend no arranca. Las variables se leen en `core/config.py` con una fuente propia de pydantic-settings (entorno por encima de `.env`), nunca con `os.environ` suelto.
+  - Un `OpenAICompatibleProvider` por proveedor; `RoutingLLMProvider` enruta por el prefijo `<nombre>/`. `ModelInfo.provider` dice de dónde viene cada modelo y `remote = not local`: el frontend, que ya cuelga sus avisos de `remote`, deja de avisar con los proveedores locales sin cambios.
+  - El presupuesto de contexto de un proveedor es su `_CONTEXT_TOKENS`; `num_ctx` solo se manda a Ollama.
+  - Compatibilidad: si `PROVIDERS` está vacío y hay `CLOUD_API_KEY`, las `CLOUD_*` se cargan como un proveedor (`CLOUD_NAME`, groq) con 6000 tokens y aviso de obsoleto en el log. Con `PROVIDERS`, las `CLOUD_*` se ignoran (y se avisa).
+  - Validación al arrancar: `BASE_URL` http(s) con host y sin usuario/contraseña; una clave nunca va por `http` a un host público; `_LOCAL=true` solo con hosts de esta máquina, la LAN o Tailscale (loopback, RFC 1918, 100.64.0.0/10, `*.ts.net`, `host.docker.internal`), porque esconde el aviso de privacidad. Tras leerlas, las variables en claro se descartan: la clave solo queda en `ProviderConfig.api_key` (`SecretStr`).
+- **Consecuencias**: un modelo de Ollama con espacio de nombres (`usuario/modelo`) cuyo prefijo coincida con un proveedor se ocultaría en el selector (con aviso en el log), porque se enrutaría a ese proveedor: no usar ese nombre de proveedor. En LM Studio, `_CONTEXT_TOKENS` debe coincidir con la ventana con la que se carga el modelo (4096 por defecto). Marcar como `_LOCAL` un servicio remoto escondería el aviso de privacidad.
 

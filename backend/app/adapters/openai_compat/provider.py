@@ -36,11 +36,16 @@ class OpenAICompatibleProvider:
         allowed_models: Sequence[str] = (),
         chat_timeout: httpx.Timeout | None = None,
         vision_models: Sequence[str] = (),
+        local: bool = False,
+        key_variable: str = "",
     ) -> None:
         self._client = client
         self.name = name
         self._allowed = set(allowed_models)
         self._vision = set(vision_models)
+        # A server on this machine (LM Studio, llama.cpp): its models count as local.
+        self._local = local
+        self._key_variable = key_variable or f"PROVIDER_{name.upper()}_API_KEY"
         self._chat_timeout = chat_timeout or client.timeout
 
     async def is_available(self) -> bool:
@@ -66,7 +71,16 @@ class OpenAICompatibleProvider:
             ids = [i for i in ids if i in self._allowed]
         else:
             ids = [i for i in ids if not any(marker in i.lower() for marker in _NON_CHAT_MARKERS)]
-        return [ModelInfo(name=i, size_bytes=0, remote=True, vision=i in self._vision) for i in ids]
+        return [
+            ModelInfo(
+                name=i,
+                size_bytes=0,
+                remote=not self._local,
+                vision=i in self._vision,
+                provider=self.name,
+            )
+            for i in ids
+        ]
 
     async def supports_vision(self, model: str) -> bool:
         return model in self._vision and self._is_allowed(model)
@@ -135,7 +149,7 @@ class OpenAICompatibleProvider:
         logger.warning("%s answered %d: %.300s", self.name, status, response.text)
         if status in (httpx.codes.UNAUTHORIZED, httpx.codes.FORBIDDEN):
             raise ModelUnavailableError(
-                f"{self.name} rechazó la clave de API (revisa CLOUD_API_KEY)"
+                f"{self.name} rechazó la clave de API (revisa {self._key_variable})"
             )
         if status in (httpx.codes.BAD_REQUEST, httpx.codes.REQUEST_ENTITY_TOO_LARGE) and (
             "context_length" in response.text or "context window" in response.text.lower()
@@ -171,10 +185,10 @@ def _openai_message(message: ChatMessage) -> dict[str, object]:
 def build_openai_compatible_client(
     base_url: str, api_key: str, timeout_seconds: float
 ) -> httpx.AsyncClient:
+    """Without a key (LM Studio, llama.cpp) no Authorization header is sent at all."""
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     return httpx.AsyncClient(
-        base_url=base_url.rstrip("/"),
-        headers={"Authorization": f"Bearer {api_key}"},
-        timeout=timeout_seconds,
+        base_url=base_url.rstrip("/"), headers=headers, timeout=timeout_seconds
     )
 
 

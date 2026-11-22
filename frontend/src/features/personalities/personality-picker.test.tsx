@@ -30,6 +30,7 @@ const MODELS: ModelInfo[] = [
     quantization: null,
     remote: true,
     vision: false,
+    provider: 'ollama',
   },
 ];
 

@@ -18,6 +18,7 @@ class ModelOut(BaseModel):
     quantization: str | None
     remote: bool
     vision: bool
+    provider: str
 
 
 class ModelsResponse(BaseModel):
@@ -41,6 +42,7 @@ async def list_models(
                 quantization=m.quantization,
                 remote=m.remote,
                 vision=m.vision,
+                provider=m.provider,
             )
             for m in models
         ],

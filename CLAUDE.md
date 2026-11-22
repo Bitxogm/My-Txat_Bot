@@ -1,6 +1,6 @@
 # CLAUDE.md — Txat_bot
 
-Chatbot personal sobre Ollama (local), con modelos en la nube opcionales vía Groq (ADR-012), personalidad configurable y orientado a ayudar en labs/CTF autorizados. App de navegador (PWA), totalmente dockerizada.
+Chatbot personal sobre Ollama (local), con proveedores compatibles con OpenAI opcionales (Groq en la nube, LM Studio en local; ADR-012, ADR-019), personalidad configurable y orientado a ayudar en labs/CTF autorizados. App de navegador (PWA), totalmente dockerizada.
 
 ## Fase actual
 **Fase 3 (personalización)**: memoria persistente aprobada por el usuario, valoraciones 👍/👎 y exportación del dataset para el fine-tuning. Fases 0-2 cerradas (chat, login, conversaciones, personalidades, catálogo OSINT, adjuntos de texto/PDF/imágenes y PWA). Después: Conocimiento (RAG), Kali y modelo propio. Detalle en `docs/roadmap.md`. Actualiza esta línea al cambiar de fase.
@@ -8,7 +8,7 @@ Chatbot personal sobre Ollama (local), con modelos en la nube opcionales vía Gr
 ## Stack
 - **Backend**: Python 3.12, FastAPI (async), pydantic-settings, Ruff, pytest. SQLite (aiosqlite); ChromaDB solo con RAG. pypdf y Pillow para adjuntos, siempre en el proceso aislado.
 - **Frontend**: Vite, React, TypeScript (strict), Tailwind, shadcn/ui, Sonner, vite-plugin-pwa, ESLint, Prettier, Vitest.
-- **Modelos**: Ollama, servicio aparte. El backend lo alcanza por `OLLAMA_BASE_URL` (nombre Tailscale del host, puerto 11434). Opcional: proveedor en la nube compatible con OpenAI (Groq gratuito, `CLOUD_*`, ADR-012).
+- **Modelos**: Ollama, servicio aparte. El backend lo alcanza por `OLLAMA_BASE_URL` (nombre Tailscale del host, puerto 11434). Opcional: varios proveedores compatibles con OpenAI (`PROVIDERS` + `PROVIDER_<NOMBRE>_*`, ADR-019), p. ej. Groq gratuito y LM Studio local (`_LOCAL=true`). `CLOUD_*` está obsoleto.
 - **Infra**: Docker Compose. Perfil `ollama` para levantar Ollama local con GPU NVIDIA.
 
 ## Estructura
@@ -45,7 +45,7 @@ Dependencias Python con uv (`uv add`), siempre con `uv.lock` commiteado.
 
 ## Reglas de código
 - Backend: todo async; tipado completo; nada de `print`, usar el logger. Config solo vía `core/config.py` (pydantic-settings), nunca `os.environ` suelto.
-- El modelo se usa a través del puerto `LLMProvider` (`RoutingLLMProvider` reparte entre Ollama y la nube). Nada de llamar a Ollama fuera de `adapters/ollama` ni a la nube fuera de `adapters/openai_compat`.
+- El modelo se usa a través del puerto `LLMProvider` (`RoutingLLMProvider` reparte entre Ollama y los proveedores por el prefijo `<nombre>/`). Nada de llamar a Ollama fuera de `adapters/ollama` ni a un proveedor fuera de `adapters/openai_compat`.
 - Frontend: prohibido `fetch` fuera de `src/lib/api` (lo bloquea ESLint). Componentes de `components/ui/` no se editan a mano salvo necesidad.
 - Sin `any` en TypeScript. Sin secretos ni URLs fijas en el código.
 - Las decisiones de arquitectura nuevas se registran como ADR en `docs/decisions.md`.

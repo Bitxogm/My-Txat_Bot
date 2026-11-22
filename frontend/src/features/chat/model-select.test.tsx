@@ -12,6 +12,7 @@ function model(name: string, remote: boolean, vision = false): ModelInfo {
     quantization: null,
     remote,
     vision,
+    provider: remote ? 'groq' : 'ollama',
   };
 }
 
