@@ -134,3 +134,20 @@ describe('attachment endpoints', () => {
     expect(fetchMock.mock.calls[0][1]?.method).toBe('DELETE');
   });
 });
+
+describe('stream errors', () => {
+  it('carries the rate-limit fields of an error event', async () => {
+    mockFetch(
+      streamResponse([
+        'event: error\ndata: {"code": "MODEL_RATE_LIMITED", "message": "m", "request_id": "r",' +
+          ' "provider": "groq", "retry_after": 30}\n\n',
+      ]),
+    );
+
+    await expect(streamChat(body, { onToken: vi.fn() })).rejects.toMatchObject({
+      code: 'MODEL_RATE_LIMITED',
+      provider: 'groq',
+      retryAfter: 30,
+    });
+  });
+});

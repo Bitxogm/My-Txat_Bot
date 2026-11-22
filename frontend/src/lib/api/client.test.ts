@@ -106,3 +106,38 @@ describe('request', () => {
     expect(handler.mock.calls[0][0]).toBeInstanceOf(ApiError);
   });
 });
+
+describe('rate-limit fields', () => {
+  it('reads provider and retry_after from a 429', async () => {
+    mockFetch(
+      jsonResponse(429, {
+        error: {
+          code: 'MODEL_RATE_LIMITED',
+          message: 'Límite de groq alcanzado, disponible en 12 s.',
+          request_id: 'rid',
+          provider: 'groq',
+          retry_after: 12,
+        },
+      }),
+    );
+
+    const error = await catchError(request('/x'));
+
+    expect(error.kind).toBe('rate_limited');
+    expect(error.provider).toBe('groq');
+    expect(error.retryAfter).toBe(12);
+  });
+
+  it('ignores malformed values', async () => {
+    mockFetch(
+      jsonResponse(429, {
+        error: { code: 'MODEL_RATE_LIMITED', message: 'm', request_id: 'r', retry_after: '12' },
+      }),
+    );
+
+    const error = await catchError(request('/x'));
+
+    expect(error.provider).toBeNull();
+    expect(error.retryAfter).toBeNull();
+  });
+});

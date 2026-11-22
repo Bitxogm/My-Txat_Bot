@@ -1,4 +1,4 @@
-import { API_BASE, networkError, request, send } from './client';
+import { API_BASE, networkError, rateLimitFields, request, send } from './client';
 import { ApiError, fallbackMessage, isAbortError } from './errors';
 import { readSse } from './sse';
 import type {
@@ -92,6 +92,7 @@ async function streamReply(
           code: asString(payload.code) ?? 'STREAM_ERROR',
           message: asString(payload.message) ?? fallbackMessage('server'),
           requestId: asString(payload.request_id),
+          ...rateLimitFields(payload),
         });
       }
     }
