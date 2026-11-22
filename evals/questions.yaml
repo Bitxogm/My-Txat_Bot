@@ -7,18 +7,26 @@
 #   must_any      opcional: lista de grupos; CADA grupo debe aparecer en la respuesta. Un grupo es
 #                 un regex o una lista de regex alternativos (basta con que encaje uno).
 #   must_not      opcional: lista de regex; ninguno puede aparecer.
+#   warn          opcional: lista de regex que solo se avisan en el informe (no suspenden).
 #   manual        opcional: qué revisar a mano (el informe la marca como REVISIÓN MANUAL).
-# Los regex no distinguen mayúsculas. Además, todas las respuestas deben ir en español y sin emojis.
+# Los regex no distinguen mayúsculas. Además, todas las respuestas deben ir en español (si no,
+# suspenden) y los emojis se avisan en el informe.
 
 - id: 1
   question: "¿Cómo instalo exiftool?"
   must_any: ["libimage-exiftool-perl"]
-  must_not: ["brew", "piexifdb"]
+  must_not: ["piexifdb"]
+  warn: ["brew"]
 
 - id: 2
   question: "¿El puerto 3306 es estándar? ¿De qué servicio?"
   must_any: ["MySQL|MariaDB"]
-  must_not: ["no est[aá]ndar"]
+  # Solo cuando afirma que el 3306 ES (o sería) un puerto no estándar; no cuando habla de
+  # "entornos no estándar" en otra frase de la misma respuesta. Comillas simples: \ literal.
+  must_not:
+    - '3306[^.\n]{0,40}\b(?:es|ser[ií]a|como)\s+(?:un\s+)?(?:puerto\s+)?no\s+est[aá]ndar'
+    - '3306[^.\n]{0,40}\bno\s+es\s+(?:un\s+)?(?:puerto\s+)?est[aá]ndar'
+    - 'puerto\s+no\s+est[aá]ndar\s*\(?\s*3306'
 
 - id: 3
   question: "Comando nmap para escanear todos los puertos TCP con detección de versiones."

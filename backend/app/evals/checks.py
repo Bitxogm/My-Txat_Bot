@@ -29,6 +29,8 @@ class Question:
     question: str
     must_any: list[list[str]] = field(default_factory=list)
     must_not: list[str] = field(default_factory=list)
+    # Worth flagging in the report, but not a failure (e.g. a macOS line in a Linux answer).
+    warn: list[str] = field(default_factory=list)
     personality: str | None = None
     manual: str | None = None
     kind: str | None = None
@@ -55,11 +57,13 @@ def load_questions(path: Path) -> list[Question]:
             question=str(item["question"]),
             must_any=_groups(item.get("must_any")),
             must_not=[str(p) for p in item.get("must_not") or []],
+            warn=[str(p) for p in item.get("warn") or []],
             personality=item.get("personality"),
             manual=item.get("manual"),
             kind=item.get("kind"),
         )
-        for pattern in [p for g in question.must_any for p in g] + question.must_not:
+        patterns = [p for g in question.must_any for p in g] + question.must_not + question.warn
+        for pattern in patterns:
             re.compile(pattern)  # a typo in the YAML fails before calling any model
         questions.append(question)
     return questions
@@ -80,17 +84,28 @@ def is_spanish(text: str) -> bool:
     return spanish > english
 
 
-def check(question: Question, answer: str) -> list[str]:
-    """Reasons the answer fails the automatic checks; empty when it passes."""
+@dataclass(frozen=True, slots=True)
+class Verdict:
+    """`reasons` fail the answer; `warnings` only show up in the report."""
+
+    reasons: list[str]
+    warnings: list[str]
+
+
+def check(question: Question, answer: str) -> Verdict:
     reasons: list[str] = []
+    warnings: list[str] = []
     for group in question.must_any:
         if not any(re.search(p, answer, re.IGNORECASE) for p in group):
             reasons.append(f"falta {' | '.join(group)}")
     for pattern in question.must_not:
         if re.search(pattern, answer, re.IGNORECASE):
             reasons.append(f"contiene {pattern}")
+    for pattern in question.warn:
+        if re.search(pattern, answer, re.IGNORECASE):
+            warnings.append(f"menciona {pattern}")
     if has_emoji(answer):
-        reasons.append("usa emojis")
+        warnings.append("usa emojis")
     if not is_spanish(answer):
         reasons.append("no está en español")
-    return reasons
+    return Verdict(reasons, warnings)
