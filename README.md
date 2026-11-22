@@ -1,6 +1,6 @@
 # Txat_bot
 
-Chatbot personal para tu red. Usa modelos abiertos servidos por Ollama en local y, si quieres, modelos en la nube vía Groq (opcional). Tiene personalidades configurables y está pensado como copiloto para laboratorios y CTF autorizados (Kali, HackMyVM, DockerLabs).
+Chatbot personal para tu red. Usa modelos abiertos servidos por Ollama en local y, si quieres, otros proveedores compatibles con OpenAI: Groq en la nube o LM Studio en tu máquina (opcionales). Tiene personalidades configurables y está pensado como copiloto para laboratorios y CTF autorizados (Kali, HackMyVM, DockerLabs).
 
 > Estado: **Fase 3** (personalización). Ver [docs/roadmap.md](docs/roadmap.md).
 
@@ -10,7 +10,7 @@ Chatbot personal para tu red. Usa modelos abiertos servidos por Ollama en local 
 - Login de un solo usuario (cookie httpOnly).
 - Selector de modelo:
   - Locales: los de Ollama.
-  - En la nube (opcional): Groq en su plan gratuito u otro proveedor compatible con OpenAI. Lo que se envía a un modelo de la nube sale de tu red.
+  - Otros proveedores compatibles con OpenAI (opcional, varios a la vez): Groq en su plan gratuito, OpenRouter, LM Studio o llama.cpp en local… Lo que se envía a un modelo de la nube sale de tu red.
 - 8 personalidades incorporadas (Mentor CTF, Pentester, Auditor de Huella Digital…) más las tuyas, editables. Los límites éticos van en una capa base fija.
 - Catálogo de fuentes OSINT para el Auditor de Huella Digital.
 - Adjuntos: ficheros de texto (logs, salidas de nmap, código…), PDF e imágenes. Las imágenes solo se envían a modelos con visión.
@@ -57,7 +57,7 @@ Rellena `backend/.env`:
 - `AUTH_PASSWORD_HASH`, entre comillas simples. Se genera con `uv run python -m app.cli hash-password` desde `backend/`.
 - `SESSION_SECRET`, que se genera con `uv run python -m app.cli session-secret`.
 - `OLLAMA_BASE_URL`.
-- `CLOUD_API_KEY`, solo si quieres modelos en la nube.
+- `PROVIDERS` y `PROVIDER_<NOMBRE>_*`, solo si quieres Groq, LM Studio u otros proveedores (ver `backend/.env.example`).
 
 Después:
 
