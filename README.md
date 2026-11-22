@@ -16,7 +16,7 @@ Chatbot personal para tu red. Usa modelos abiertos servidos por Ollama en local 
 - Adjuntos: ficheros de texto (logs, salidas de nmap, código…), PDF e imágenes. Las imágenes solo se envían a modelos con visión.
 - Respuestas en Markdown seguro, con resaltado de código y botón de copiar.
 - Modo día/noche.
-- PWA instalable (con HTTPS, p. ej. `tailscale serve`), con pantalla de "sin conexión" en lugar de datos viejos.
+- PWA instalable (necesita HTTPS, p. ej. `tailscale serve` si usas Tailscale), con pantalla de "sin conexión" en lugar de datos viejos.
 
 Próximas fases:
 - Memoria y valoraciones para personalizar el modelo.
@@ -32,7 +32,7 @@ Próximas fases:
 | Modelos | Ollama (GPU NVIDIA); opcional Groq u otro proveedor compatible con OpenAI |
 | Backend | Python 3.12, FastAPI, SQLite (aiosqlite), pypdf, Pillow, uv, Ruff, pytest |
 | Frontend | Vite, React, TypeScript, Tailwind, shadcn/ui, Sonner, vite-plugin-pwa, ESLint, Prettier, Vitest |
-| Infra | Docker Compose (contenedores sin root y de solo lectura), NVIDIA Container Toolkit, Tailscale |
+| Infra | Docker Compose (contenedores sin root y de solo lectura), NVIDIA Container Toolkit; Tailscale opcional |
 
 ## Estructura
 
@@ -65,7 +65,7 @@ Después:
 docker compose up -d
 ```
 
-Ollama corre en la máquina con GPU y el backend lo alcanza por Tailscale (`OLLAMA_BASE_URL`). Para levantarlo en la misma máquina:
+Todo corre en la misma máquina. Si Ollama ya está instalado en el host, el backend en Docker lo alcanza por `host.docker.internal` (`OLLAMA_BASE_URL=http://host.docker.internal:11434`). Para levantarlo con el Compose:
 
 ```bash
 docker compose --profile ollama up -d
@@ -78,7 +78,7 @@ Desarrollo sin Docker:
 
 ## Seguridad
 
-Solo para uso personal. Accesible únicamente desde la red de casa y Tailscale; nada se expone a internet. Detalles en [docs/security.md](docs/security.md).
+Solo para uso personal. Se usa desde la red de casa (`BIND_ADDR` = IP de LAN); Tailscale es opcional y nada se expone a internet. Detalles en [docs/security.md](docs/security.md).
 
 Con un modelo `groq/...` el contenido de la conversación (mensajes, ficheros e imágenes) sale a un tercero: nada de datos reales ni de clientes; para eso, modelos locales.
 

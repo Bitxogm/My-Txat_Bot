@@ -8,7 +8,7 @@ Chatbot personal sobre Ollama (local), con proveedores compatibles con OpenAI op
 ## Stack
 - **Backend**: Python 3.12, FastAPI (async), pydantic-settings, Ruff, pytest. SQLite (aiosqlite); ChromaDB solo con RAG. pypdf y Pillow para adjuntos, siempre en el proceso aislado.
 - **Frontend**: Vite, React, TypeScript (strict), Tailwind, shadcn/ui, Sonner, vite-plugin-pwa, ESLint, Prettier, Vitest.
-- **Modelos**: Ollama, servicio aparte. El backend lo alcanza por `OLLAMA_BASE_URL` (nombre Tailscale del host, puerto 11434). Opcional: varios proveedores compatibles con OpenAI (`PROVIDERS` + `PROVIDER_<NOMBRE>_*`, ADR-019), p. ej. Groq gratuito y LM Studio local (`_LOCAL=true`). `CLOUD_*` está obsoleto.
+- **Modelos**: Ollama, servicio aparte. El backend lo alcanza por `OLLAMA_BASE_URL` (puerto 11434; en la misma máquina: `127.0.0.1` en desarrollo, `host.docker.internal` o `ollama` desde Docker). Opcional: varios proveedores compatibles con OpenAI (`PROVIDERS` + `PROVIDER_<NOMBRE>_*`, ADR-019), p. ej. Groq gratuito y LM Studio local (`_LOCAL=true`). `CLOUD_*` está obsoleto.
 - **Infra**: Docker Compose. Perfil `ollama` para levantar Ollama local con GPU NVIDIA.
 
 ## Estructura
@@ -93,17 +93,17 @@ Claude hace ramas, commits, push y PRs sin pedir permiso. Void revisa y mergea; 
 
 `mobile` y `telefonia-ia` no aplican a este proyecto.
 
-## Límites de hardware
-- Host de Ollama ahora: Acer (Kali) con RTX 3060 12 GB. Techo práctico: modelos 7-14B cuantizados (Q4/Q5), un modelo cargado a la vez, contexto moderado.
-- X570 (Ubuntu) es la máquina de desarrollo; puede recibir 2x RTX 3060 más adelante.
-- No asumir GPU en la máquina que corre backend/frontend.
+## Despliegue y hardware
+- Despliegue previsto: una sola máquina, la torre Acer (RTX 3060 12 GB), con todo dentro (frontend, backend, Ollama, LM Studio). Los servicios se hablan por `127.0.0.1` / `host.docker.internal`. Techo práctico de la GPU: modelos 7-14B cuantizados (Q4/Q5), un modelo cargado a la vez, contexto moderado (los MoE grandes, a medias con CPU).
+- X570 (Ubuntu) es la máquina de desarrollo (Docker Desktop); puede recibir 2x RTX 3060 más adelante.
+- Acceso: la LAN de casa (`BIND_ADDR` = IP de LAN). Tailscale es opcional y se decide al desplegar: solo si se quiere acceso desde fuera de casa o HTTPS fácil para instalar la PWA en el móvil.
 
 ## Seguridad (trampas activas)
 - Repo **público**: nunca commitear `.env`, bases de datos, uploads, modelos, IPs, nombres de host Tailscale reales ni datos personales. Solo `.env.example` con valores vacíos.
-- Acceso solo LAN + Tailscale. Puertos publicados en `BIND_ADDR`, nunca `0.0.0.0` por defecto. Sin cambios en el router ni túneles públicos.
-- Ollama no tiene auth: jamás exponerlo fuera de Tailscale/localhost.
+- Acceso por la LAN de casa: el frontend se publica en `BIND_ADDR` (IP de LAN), nunca `0.0.0.0` sin decidirlo. Backend y Ollama solo en `127.0.0.1`. Tailscale opcional. Sin puertos abiertos en el router ni túneles públicos en ningún caso.
+- Ollama y LM Studio no tienen auth: escuchan solo en `127.0.0.1` (Docker Desktop los alcanza por `host.docker.internal`); nunca en `0.0.0.0` ni con "Serve on Local Network".
 - Con un modelo `groq/...` el contenido (mensajes, ficheros, imágenes) sale a un tercero: nada de datos reales ni de clientes; para eso, modelos locales.
-- PWA (ADR-017): el service worker nunca maneja `/api` (sin `runtimeCaching`, `/api` fuera del `navigateFallback`). Solo funciona con HTTPS (`tailscale serve`, nunca `funnel`). La API responde `Cache-Control: no-store` por defecto.
+- PWA (ADR-017): el service worker nunca maneja `/api` (sin `runtimeCaching`, `/api` fuera del `navigateFallback`). Solo funciona con HTTPS (p. ej. `tailscale serve` si se adopta Tailscale; nunca `funnel`). La API responde `Cache-Control: no-store` por defecto.
 - Login de un usuario: hash argon2/bcrypt, cookie `httpOnly` + `SameSite=Strict`, nada en `localStorage`.
 - Asistente Kali: sugiere comandos, **nunca ejecuta sin confirmación explícita**. Uso solo en entornos propios o autorizados.
 - Ficheros subidos: límite de tamaño, tipo por contenido (no por el MIME del cliente), nombre generado en el servidor. PDF e imágenes se parsean solo en el proceso aislado (`adapters/files/isolated.py`); las imágenes se recodifican sin metadatos. Su contenido va al modelo como datos en el mensaje del usuario, nunca en el system prompt.
