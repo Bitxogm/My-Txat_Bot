@@ -4,7 +4,7 @@
 
 ```
 Navegador (PWA)
-   │  HTTP/SSE, solo LAN o Tailscale
+   │  HTTP/SSE, LAN de casa (Tailscale opcional)
    ▼
 frontend (Vite build servido por nginx)
    │  /api/*
@@ -13,14 +13,15 @@ backend (FastAPI) ──── SQLite (data/txatbot.db) + uploads (data/uploads/
    │    │           └── ChromaDB (futuro, RAG)
    │    │  HTTPS (opcional, sale de la red)
    │    └──────────▶ proveedores compatibles con OpenAI (Groq en la nube, LM Studio local…)
-   │  HTTP, Tailscale
+   │  HTTP, 127.0.0.1 / host.docker.internal (misma máquina)
    ▼
-Ollama (máquina con GPU, puerto 11434)
+Ollama (puerto 11434, GPU) · LM Studio (puerto 1234)
 ```
 
 - **frontend**: SPA React. Todo acceso a la API pasa por un único cliente (`src/lib/api`).
 - **backend**: FastAPI asíncrono. Orquesta conversaciones, personalidades, ficheros y llamadas al modelo.
-- **Ollama**: servicio aparte. Por defecto remoto (Acer con RTX 3060 vía Tailscale). Opcionalmente en el mismo Compose con el perfil `ollama`.
+- **Ollama**: servicio aparte en la misma máquina (instalado en el host, o en el Compose con el perfil `ollama`). Escucha solo en `127.0.0.1`; el backend en Docker llega por `host.docker.internal` (Docker Desktop lo reenvía al loopback del host) o por `ollama:11434`.
+- **Despliegue previsto**: una sola máquina (torre Acer, RTX 3060 12 GB) con todo dentro. Acceso por la LAN de casa (frontend en `BIND_ADDR`); backend, Ollama y LM Studio solo en `127.0.0.1`. Tailscale es opcional (acceso desde fuera de casa o HTTPS para la PWA).
 - **Proveedores compatibles con OpenAI (opcionales, ADR-019)**: los de `PROVIDERS`, cada uno con su `PROVIDER_<NOMBRE>_*`. Remotos (Groq) o locales (`_LOCAL=true`: LM Studio, llama.cpp).
 - **Datos**: SQLite en `data/`, montado como volumen. Uploads en `data/uploads/`.
 
@@ -169,7 +170,7 @@ frontend/src/
 
 | Máquina | GPU | Rol |
 | --- | --- | --- |
-| Acer (Kali) | RTX 3060 12 GB | Host de Ollama ahora |
-| X570 (Ubuntu) | Posible 2x RTX 3060 en el futuro | Desarrollo |
+| Acer (torre) | RTX 3060 12 GB | Despliegue previsto: todo en esta máquina |
+| X570 (Ubuntu, Docker Desktop) | Posible 2x RTX 3060 en el futuro | Desarrollo |
 
 Con 12 GB de VRAM el techo práctico son modelos de 7-14B cuantizados (Q4/Q5) con contexto moderado. Modelos más grandes o varios a la vez no caben; el selector debe mostrar solo lo que Ollama tiene cargado o disponible.

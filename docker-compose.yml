@@ -1,5 +1,5 @@
 # Uso:
-#   docker compose up -d                      -> backend + frontend (Ollama remoto vía Tailscale)
+#   docker compose up -d                      -> backend + frontend (Ollama ya instalado en el host)
 #   docker compose --profile ollama up -d     -> además levanta Ollama local con GPU NVIDIA
 
 x-logging: &default-logging
@@ -33,8 +33,16 @@ services:
     # Second barrier over the 1 GB RLIMIT_AS of the parser child (adapters/files/isolated.py).
     mem_limit: 2g
     pids_limit: 128
+    # LM Studio / Ollama on this host (ADR-019). Docker Desktop forwards this name to the host's
+    # 127.0.0.1, so they can keep listening on loopback only. With native Docker Engine it
+    # resolves to docker0 instead: then bind them there (lms server start --bind 172.17.0.1),
+    # never to 0.0.0.0. See docs/security.md.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Only this machine: the browser reaches the API through the frontend's nginx (/api), so the
+    # backend never needs to be published on the LAN.
     ports:
-      - "${BIND_ADDR:-127.0.0.1}:${BACKEND_PORT:-8000}:8000"
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 30s
@@ -74,8 +82,10 @@ services:
     profiles: ["ollama"]
     volumes:
       - ollama:/root/.ollama
+    # Ollama has no authentication: loopback only, whatever BIND_ADDR says. The backend reaches it
+    # on the Compose network (OLLAMA_BASE_URL=http://ollama:11434).
     ports:
-      - "${BIND_ADDR:-127.0.0.1}:${OLLAMA_PORT:-11434}:11434"
+      - "127.0.0.1:${OLLAMA_PORT:-11434}:11434"
     deploy:
       resources:
         reservations:

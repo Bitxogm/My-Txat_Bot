@@ -1,10 +1,13 @@
 # Seguridad
 
 ## Exposición
-- La app solo es accesible desde la red de casa y desde Tailscale.
-- Nada se expone a internet: sin port forwarding, sin túneles públicos, sin cambios en el router.
-- Los puertos de Compose se publican en `BIND_ADDR` (por defecto `127.0.0.1`), nunca en `0.0.0.0` por defecto.
-- Ollama (11434) no tiene autenticación: solo debe ser alcanzable por Tailscale o localhost.
+- Despliegue previsto: una sola máquina con todo dentro. La app se usa desde la red de casa.
+- Nada se expone a internet: sin port forwarding, sin túneles públicos, sin cambios en el router, en ningún caso.
+- Solo el frontend se publica en `BIND_ADDR` (la IP de LAN para usarla desde casa; `127.0.0.1` por defecto). Nunca `0.0.0.0` sin decidirlo. El backend y Ollama (perfil `ollama`) se publican siempre en `127.0.0.1`: el navegador llega a la API por el nginx del frontend.
+- Ollama (11434) y LM Studio (1234) no tienen autenticación: escuchan solo en `127.0.0.1` ("Serve on Local Network" de LM Studio desactivado).
+  - El backend en Docker los alcanza por `host.docker.internal` (`extra_hosts` en el compose): Docker Desktop reenvía ese nombre al loopback del host. Consecuencia: cualquier contenedor de esta máquina puede llegar a los servicios del host en `127.0.0.1`; no ejecutar contenedores de terceros no confiables junto a ellos.
+  - Con Docker Engine nativo (sin Docker Desktop) ese reenvío no existe: ligar LM Studio a la IP de `docker0` (`lms server start --bind 172.17.0.1`), **nunca a `0.0.0.0`**.
+- Tailscale es opcional, a decidir al desplegar: solo para acceso desde fuera de casa o HTTPS fácil para instalar la PWA en el móvil. Si se usa, solo `tailscale serve`, nunca `tailscale funnel`.
 
 ## Autenticación
 - Login de un solo usuario (`AUTH_USERNAME`). La contraseña se guarda como hash argon2id en `backend/.env` (`AUTH_PASSWORD_HASH`, **entre comillas simples**: sin ellas Compose expande los `$` y el hash se rompe). Se genera con `uv run python -m app.cli hash-password`.
@@ -21,8 +24,8 @@
 - Usuario y contraseña incorrectos devuelven el mismo error y tardan lo mismo (el hash se verifica siempre). La contraseña nunca se loguea.
 
 ### Riesgos aceptados
-- **Bloqueo global**: es global y no por IP porque el puerto del backend es accesible directamente y `X-Forwarded-For` no es fiable. Cualquiera en la LAN o el tailnet puede mantener el login bloqueado mientras siga fallando.
-- **HTTP en la LAN**: por Tailscale el tráfico va cifrado (WireGuard), pero por la LAN física con `BIND_ADDR` en la IP local la contraseña y la cookie viajan en claro. Recomendado: acceder solo por Tailscale y servir HTTPS con `tailscale serve`; entonces poner `COOKIE_SECURE=true` y añadir HSTS en nginx.
+- **Bloqueo global**: es global y no por IP porque `X-Forwarded-For` no es fiable. Cualquiera en la LAN (o el tailnet, si se usa) puede mantener el login bloqueado mientras siga fallando.
+- **HTTP en la LAN**: por la LAN de casa la contraseña y la cookie viajan en claro (cualquiera en la misma red podría verlas). Si eso preocupa, servir HTTPS (p. ej. `tailscale serve`, que además cifra con WireGuard), poner `COOKIE_SECURE=true` y añadir HSTS en nginx.
 - **Cookies por host, no por puerto**: otra app del mismo host bajo `/api` recibiría la cookie. Usar un nombre de host propio (MagicDNS) lo evita.
 - **Docs de la API**: con `APP_ENV=development` `/api/docs` y `/api/openapi.json` son públicos. En Docker, `docker-compose.yml` fija `APP_ENV=production` y no se sirven.
 
@@ -61,7 +64,7 @@
 - Sin servidor no se muestran datos viejos: la app enseña "Sin conexión con el servidor". Ese estado no da acceso a nada; el chat solo aparece tras un `/api/auth/me` correcto.
 - Actualizaciones: `sw.js` y el manifest se sirven con `no-cache`; la app busca versión nueva cada hora y pide permiso antes de recargar.
 - Desinstalar un service worker defectuoso: publicar un build con `selfDestroying: true` en las opciones de `VitePWA` (`frontend/src/pwa/options.ts`) y volver a desplegar.
-- **Requiere HTTPS**: por `http://IP` (LAN o Tailscale) el navegador no registra el service worker y no se puede instalar. La app sigue funcionando como web normal. Despliegue con HTTPS:
+- **Requiere HTTPS**: por `http://IP` el navegador no registra el service worker y no se puede instalar. La app sigue funcionando como web normal. Despliegue con HTTPS (opcional, con Tailscale):
   1. `tailscale serve` hacia el puerto del frontend. **Nunca `tailscale funnel`**, que lo publica en internet.
   2. `COOKIE_SECURE=true` en `backend/.env`.
   3. HSTS en `frontend/nginx-security-headers.conf`, solo en ese despliegue, empezando con un `max-age` corto y sin `includeSubDomains`.
