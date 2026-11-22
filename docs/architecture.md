@@ -112,7 +112,8 @@ Requiere sesión (401 sin cookie válida). `/api/chat` es la variante sin estado
 ## Evaluación de respuestas
 
 `evals/questions.yaml` es una batería fija de preguntas (comandos, datos comprobables, trampas, inyección de prompt, método del Mentor y límites de OSINT). `uv run python -m app.cli eval --models <modelos> [--think on|off] [--personality <nombre>] [--only <ids>]` (desde `backend/`) las hace con la misma composición de prompt, el mismo ajuste de contexto y el mismo `LLMProvider` que el chat (`app/adapters/llm_factory.py`), y escribe un informe por modelo en `evals/reports/` (fuera de git):
-- Comprobaciones automáticas por pregunta: `must_any` (cada grupo de regex debe aparecer) y `must_not` (ninguno), más dos globales: sin emojis y en español.
+- Comprobaciones automáticas por pregunta: `must_any` (cada grupo de regex debe aparecer) y `must_not` (ninguno), más la global de idioma (en español). `warn` (por pregunta) y los emojis (global) solo salen como avisos en el informe, no suspenden.
+- Junto a cada informe `.md` se guarda un `.json` con las respuestas en bruto. `eval --recheck <informe>` las vuelve a corregir con las reglas actuales sin llamar al modelo (los informes antiguos sin JSON se leen del propio `.md`). Con `--personality`, el nombre del informe lleva la personalidad.
 - Las que piden juicio (trampas, Mentor, límites) salen como "REVISIÓN MANUAL".
 - No va en la CI (necesita modelos); el corrector tiene tests unitarios.
 
