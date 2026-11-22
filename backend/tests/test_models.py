@@ -29,6 +29,7 @@ async def test_lists_models(client: httpx.AsyncClient, fake_llm: FakeLLMProvider
                 "quantization": "Q4_K_M",
                 "remote": False,
                 "vision": False,
+                "provider": "ollama",
             }
         ],
         "default_model": None,
