@@ -30,6 +30,7 @@ def _error_event(exc: AppError | None = None) -> str:
             "code": exc.code if exc else AppError.code,
             "message": exc.message if exc else AppError.message,
             "request_id": get_request_id(),
+            **(exc.details if exc else {}),
         },
     )
 
@@ -40,18 +41,23 @@ async def stream_reply(
     messages: Sequence[ChatMessage],
     on_finish: OnFinish | None = None,
     params: GenerationParams | None = None,
+    on_early_error: Callable[[], Awaitable[None]] | None = None,
 ) -> StreamingResponse:
     """Stream a model reply as SSE: `token`* then `done`, or `error`.
 
     Errors before the first token raise, so the route answers with the usual JSON error and
-    HTTP status; errors after streaming starts arrive as an `error` event.
+    HTTP status; errors after streaming starts arrive as an `error` event. For an error before
+    the first token, `on_early_error` (if given) runs instead of `on_finish("", "error")`, so
+    the caller can undo the turn.
     """
     chunks = aiter(llm.stream_chat(model, messages, params))
     # Pull the first chunk here so early failures become a normal HTTP error response.
     try:
         first = await anext(chunks, None)
     except AppError:
-        if on_finish:
+        if on_early_error:
+            await on_early_error()
+        elif on_finish:
             await on_finish("", "error")
         raise
 

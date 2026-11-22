@@ -52,7 +52,7 @@ Dependencias Python con uv (`uv add`), siempre con `uv.lock` commiteado.
 - Prompts (ADR-013): la capa base (`domain/prompts.py`) lleva los límites éticos y no es editable desde la UI. No mover esos límites a una personalidad.
 
 ## Manejo de errores (convención obligatoria)
-- Formato único de error: `{ "error": { "code", "message", "request_id" } }`.
+- Formato único de error: `{ "error": { "code", "message", "request_id" } }`. Solo `MODEL_RATE_LIMITED` (429) añade `provider` y `retry_after` (segundos o `null`), también en el evento SSE `error` (ADR-019).
 - FastAPI: handler global para `HTTPException`, validación y excepciones no controladas. Nunca se devuelve una traza al cliente.
 - Middleware de `request_id` (respeta `X-Request-ID`), presente en logs y cabecera de respuesta.
 - `GET /api/health`: estado del backend y de Ollama. Lo usa el healthcheck de Docker.
