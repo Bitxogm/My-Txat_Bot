@@ -153,6 +153,8 @@ frontend/src/
 - 401 dispara el handler registrado con `setUnauthorizedHandler` (redirección a login).
 - `streamChat` lee el SSE con `fetch` + `ReadableStream`; un evento `error` o un corte sin `done` también lanzan `ApiError`. Las cancelaciones (`AbortSignal`) se relanzan tal cual (`isAbortError`).
 - `notifyError(error)` (`src/lib/notify-error.ts`) muestra el toast; ignora cancelaciones.
+- Fallo antes de la respuesta (error HTTP antes del stream): el backend no guarda el turno (ADR-019) y el chat tampoco lo deja en pantalla; el texto vuelve al compositor tal cual y los adjuntos a pendientes.
+- Límite de un proveedor (`MODEL_RATE_LIMITED`, con `provider` y `retry_after` en `ApiError`): en vez de toast, aviso sobre el compositor "Límite de <proveedor> alcanzado. Disponible en N s" con cuenta atrás y, si `DEFAULT_MODEL` está en la lista y es local, el botón "Responder ahora con <modelo>", que reenvía el mismo texto y los mismos adjuntos con ese modelo. El modelo nunca cambia sin esa pulsación.
 
 **PWA (ADR-017)**
 - `vite-plugin-pwa` (`frontend/src/pwa/options.ts`): `generateSW`, precache del shell y nada más; `/api` nunca pasa por el service worker.
