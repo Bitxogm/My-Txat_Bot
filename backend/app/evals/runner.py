@@ -21,6 +21,15 @@ from app.ports.llm import LLMProvider
 
 
 @dataclass(frozen=True, slots=True)
+class RunInfo:
+    """Where a run's model lives and which base prompt it answered with."""
+
+    provider: str | None = None
+    local: bool | None = None
+    base_version: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class Result:
     question: Question
     personality: str
@@ -124,7 +133,25 @@ def _cell(text: str) -> str:
     return text.replace("|", "\\|").replace("\n", " ")
 
 
-def render_report(model: str, think: bool | None, results: list[Result], at: datetime) -> str:
+def _info_text(info: RunInfo | None) -> str:
+    if info is None:
+        return ""
+    parts = []
+    if info.provider:
+        where = "" if info.local is None else (" (local)" if info.local else " (nube)")
+        parts.append(f"proveedor {info.provider}{where}")
+    if info.base_version:
+        parts.append(f"capa base {info.base_version}")
+    return "".join(f" · {p}" for p in parts)
+
+
+def render_report(
+    model: str,
+    think: bool | None,
+    results: list[Result],
+    at: datetime,
+    info: RunInfo | None = None,
+) -> str:
     automatic = [r for r in results if r.status != "FALLO"]
     warned = [r for r in results if r.warnings]
     seconds = sum(r.seconds for r in results) / len(results) if results else 0.0
@@ -133,7 +160,7 @@ def render_report(model: str, think: bool | None, results: list[Result], at: dat
         f"# Evaluación · {model}{think_text}",
         "",
         f"{at:%Y-%m-%d %H:%M} · {len(automatic)}/{len(results)} superan las comprobaciones"
-        f" automáticas · {len(warned)} con avisos · {seconds:.1f} s de media",
+        f" automáticas · {len(warned)} con avisos · {seconds:.1f} s de media{_info_text(info)}",
         "",
         "| # | Personalidad | Resultado | Motivo | Avisos | Segundos | Longitud |",
         "| --- | --- | --- | --- | --- | ---: | ---: |",

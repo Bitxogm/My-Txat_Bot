@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 
 from app.evals.checks import Question
-from app.evals.runner import Result, graded
+from app.evals.runner import Result, RunInfo, graded
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,14 +29,24 @@ class SavedRun:
     think: bool | None
     at: datetime
     answers: list[SavedAnswer]
+    info: RunInfo | None = None
 
 
-def run_to_json(model: str, think: bool | None, at: datetime, results: list[Result]) -> str:
+def run_to_json(
+    model: str,
+    think: bool | None,
+    at: datetime,
+    results: list[Result],
+    info: RunInfo | None = None,
+) -> str:
     return json.dumps(
         {
             "model": model,
             "think": think,
             "at": at.isoformat(timespec="minutes"),
+            "provider": info.provider if info else None,
+            "local": info.local if info else None,
+            "base_version": info.base_version if info else None,
             "answers": [
                 {
                     "id": r.question.id,
@@ -59,6 +69,11 @@ def run_from_json(text: str) -> SavedRun:
         model=str(data["model"]),
         think=data.get("think"),
         at=datetime.fromisoformat(data["at"]),
+        info=RunInfo(
+            provider=data.get("provider"),
+            local=data.get("local"),
+            base_version=data.get("base_version"),
+        ),
         answers=[
             SavedAnswer(
                 id=str(a["id"]),
