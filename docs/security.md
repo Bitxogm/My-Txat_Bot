@@ -24,7 +24,7 @@
 - **Bloqueo global**: es global y no por IP porque el puerto del backend es accesible directamente y `X-Forwarded-For` no es fiable. Cualquiera en la LAN o el tailnet puede mantener el login bloqueado mientras siga fallando.
 - **HTTP en la LAN**: por Tailscale el tráfico va cifrado (WireGuard), pero por la LAN física con `BIND_ADDR` en la IP local la contraseña y la cookie viajan en claro. Recomendado: acceder solo por Tailscale y servir HTTPS con `tailscale serve`; entonces poner `COOKIE_SECURE=true` y añadir HSTS en nginx.
 - **Cookies por host, no por puerto**: otra app del mismo host bajo `/api` recibiría la cookie. Usar un nombre de host propio (MagicDNS) lo evita.
-- **Docs de la API**: con `APP_ENV=development` `/api/docs` y `/api/openapi.json` son públicos. En el despliegue real, `APP_ENV=production`.
+- **Docs de la API**: con `APP_ENV=development` `/api/docs` y `/api/openapi.json` son públicos. En Docker, `docker-compose.yml` fija `APP_ENV=production` y no se sirven.
 
 ## Prompts y personalidades (ADR-013)
 - Los límites éticos y de alcance están en la capa base (`backend/app/domain/prompts.py`), fija en código. Las personalidades solo añaden tono y método, delimitadas y seguidas de un recordatorio de la base.
