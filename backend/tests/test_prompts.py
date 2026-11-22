@@ -65,3 +65,36 @@ def test_auditor_asks_before_auditing_data_not_clearly_the_users() -> None:
     assert "pregúntalo antes de proponer búsquedas" in prompt
     assert "holehe y sherlock, solo sobre identificadores del propio usuario" in prompt
     assert "se consideran suyos" not in prompt
+
+
+def test_base_layer_has_the_tuning_rules() -> None:
+    """Rules added after the first eval run (PR #32): invented packages, the user's environment,
+    minimal answers, no emojis, and refusals that offer an alternative."""
+    base = " ".join(BASE_PROMPT.split())  # wrapped lines read as one
+
+    assert "cuyo nombre exacto no conozcas con certeza" in base
+    assert "typosquatting" in base and "pip index versions" in base and "apt search" in base
+    assert "Kali Linux / Ubuntu con zsh" in base
+    assert "prioriza apt con el nombre exacto del paquete Debian" in base
+    assert "No propongas Homebrew ni instrucciones de macOS/Windows salvo que se pidan" in base
+    assert "Da la respuesta mínima suficiente" in base
+    assert "No uses emojis." in base
+    assert (
+        "Si rechazas algo, explica el motivo en una frase y ofrece siempre una alternativa" in base
+    )
+
+
+def test_rules_reach_every_composed_prompt() -> None:
+    for fields in BUILTIN_PERSONALITIES.values():
+        prompt = compose_system_prompt(fields.system_prompt)
+        assert "No uses emojis." in prompt
+        assert prompt.index("No uses emojis.") < prompt.index("<personalidad>")
+
+
+def test_mentor_answers_knowledge_questions_directly() -> None:
+    mentor = " ".join(BUILTIN_PERSONALITIES["builtin-mentor-ctf"].system_prompt.split())
+
+    assert "Pregunta de conocimiento" in mentor and "respóndela directamente" in mentor
+    assert "No pidas antes qué ha probado" in mentor
+    assert "Método para retos" in mentor
+    assert mentor.index("Pregunta de conocimiento") < mentor.index("Método para retos")
