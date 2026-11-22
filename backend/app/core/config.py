@@ -88,6 +88,11 @@ class ProviderConfig(BaseModel):
     # True when the server runs on this machine (LM Studio, llama.cpp): nothing leaves it, so the
     # app treats its models as local (no "leaves your network" warnings).
     local: bool = False
+    # Sent as "reasoning_effort" when set. "none" turns reasoning off on servers that support it
+    # (LM Studio with Qwen3.x), like OLLAMA_THINK=false for Ollama: otherwise these models spend
+    # minutes and the length budget thinking (in reasoning_content) before the first word.
+    # Values depend on the server and model (Groq's gpt-oss: low/medium/high, no "none").
+    reasoning_effort: str = Field(default="", pattern=r"^[a-z]{0,16}$")
     # Variable to point at when the key is rejected.
     key_variable: str = ""
 
@@ -261,6 +266,7 @@ class Settings(BaseSettings):
             vision_models=_csv(var("vision_models")),
             context_tokens=int(context) if context else DEFAULT_PROVIDER_CONTEXT_TOKENS,
             local=local,
+            reasoning_effort=var("reasoning_effort").lower(),
             key_variable=f"PROVIDER_{name.upper()}_API_KEY",
         )
 

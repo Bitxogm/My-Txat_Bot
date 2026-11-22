@@ -38,6 +38,7 @@ class OpenAICompatibleProvider:
         vision_models: Sequence[str] = (),
         local: bool = False,
         key_variable: str = "",
+        reasoning_effort: str = "",
     ) -> None:
         self._client = client
         self.name = name
@@ -46,6 +47,12 @@ class OpenAICompatibleProvider:
         # A server on this machine (LM Studio, llama.cpp): its models count as local.
         self._local = local
         self._key_variable = key_variable or f"PROVIDER_{name.upper()}_API_KEY"
+        # Reasoning models (Qwen3.x in LM Studio) think by default. Their thoughts come in
+        # delta.reasoning_content, which is never read here, so they don't leak into the reply;
+        # but they cost minutes and tokens. PROVIDER_<NAME>_REASONING_EFFORT=none turns them off
+        # (tested with LM Studio; chat_template_kwargs {"enable_thinking": false} only did it
+        # partly). Not sent when empty: not every API accepts every value.
+        self._reasoning_effort = reasoning_effort
         self._chat_timeout = chat_timeout or client.timeout
 
     async def is_available(self) -> bool:
@@ -102,6 +109,8 @@ class OpenAICompatibleProvider:
             "messages": [_openai_message(m) for m in messages],
             "stream": True,
         }
+        if self._reasoning_effort:
+            payload["reasoning_effort"] = self._reasoning_effort
         # temperature and top_p are top-level here; num_ctx has no equivalent in this API (the
         # provider fixes the context window), so it is dropped on purpose.
         if params is not None:
