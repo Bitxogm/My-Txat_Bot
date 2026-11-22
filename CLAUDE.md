@@ -95,7 +95,8 @@ Claude hace ramas, commits, push y PRs sin pedir permiso. Void revisa y mergea; 
 `mobile` y `telefonia-ia` no aplican a este proyecto.
 
 ## Despliegue y hardware
-- Despliegue previsto: una sola máquina, la torre Acer (RTX 3060 12 GB), con todo dentro (frontend, backend, Ollama, LM Studio). Los servicios se hablan por `127.0.0.1` / `host.docker.internal`. Techo práctico de la GPU: modelos 7-14B cuantizados (Q4/Q5), un modelo cargado a la vez, contexto moderado (los MoE grandes, a medias con CPU).
+- Despliegue previsto: una sola máquina, la torre Acer (RTX 3060 12 GB), con todo dentro (frontend, backend, Ollama). Los servicios se hablan por `127.0.0.1` / `host.docker.internal`. Techo práctico de la GPU: modelos 7-14B cuantizados (Q4/Q5), un modelo cargado a la vez, contexto moderado (los MoE grandes, a medias con CPU).
+- Todos los modelos locales en **un solo motor, Ollama**, porque comparten la única GPU. Ollama decide qué modelo ocupa la VRAM y cambia entre ellos solo; dos motores (Ollama + LM Studio) no se ven entre sí y el segundo falla por falta de memoria (ADR-020). Un GGUF descargado con LM Studio se importa con un `Modelfile` (`FROM <modelo>.gguf` + `FROM <mmproj>.gguf` para la visión) y `ollama create`.
 - X570 (Ubuntu) es la máquina de desarrollo (Docker Desktop); puede recibir 2x RTX 3060 más adelante.
 - Acceso: la LAN de casa (`BIND_ADDR` = IP de LAN). Tailscale es opcional y se decide al desplegar: solo si se quiere acceso desde fuera de casa o HTTPS fácil para instalar la PWA en el móvil.
 
