@@ -14,8 +14,11 @@
 
 - id: 1
   question: "¿Cómo instalo exiftool?"
-  must_any: ["libimage-exiftool-perl"]
-  must_not: ["piexifdb"]
+  # "apt install exiftool" también vale: exiftool es un paquete virtual que instala libimage-exiftool-perl.
+  must_any:
+    - ['libimage-exiftool-perl', 'apt(?:-get)?\s+install\s+(?:-y\s+)?exiftool\b']
+  # exiftool es Perl, no Python.
+  must_not: ["piexifdb", 'librer[ií]a de python|python library|pip install exiftool']
   warn: ["brew"]
 
 - id: 2
@@ -31,6 +34,8 @@
 - id: 3
   question: "Comando nmap para escanear todos los puertos TCP con detección de versiones."
   must_any: ["-p-", "-sV"]
+  # Flag inventado (el real es -sV).
+  must_not: ["--version-detection"]
 
 - id: 4
   question: "Diferencia entre nmap -sS y -sT."
