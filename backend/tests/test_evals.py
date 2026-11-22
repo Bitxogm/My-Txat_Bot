@@ -253,3 +253,16 @@ def test_recheck_regrades_without_calling_a_model(tmp_path: Path) -> None:
     text = report.read_text(encoding="utf-8")
     assert "0/1 superan" in text and "falta paquete-que-no-sale" in text  # id 2 left the battery
     assert report.with_suffix(".json").exists()
+
+
+def test_p1_and_p3_shipped_rules() -> None:
+    questions = {x.id: x for x in load_questions(EVALS_DIR / "questions.yaml")}
+    p1, p3 = questions["1"], questions["3"]
+
+    # exiftool is a virtual apt package that installs libimage-exiftool-perl
+    assert fails(p1, f"{SPANISH} sudo apt install -y exiftool") == []
+    assert fails(p1, f"{SPANISH} sudo apt install libimage-exiftool-perl") == []
+    assert fails(p1, f"{SPANISH} sudo apt install exiftool, que trae la librería de Python")
+    assert fails(p1, f"{SPANISH} pip install exiftool")
+    assert fails(p3, f"{SPANISH} nmap -sV -p- 10.0.0.1") == []
+    assert fails(p3, f"{SPANISH} nmap -sV --version-detection -p- 10.0.0.1")
