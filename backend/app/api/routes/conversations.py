@@ -366,13 +366,28 @@ async def send_message(
         await attachments.release(user_message.id)
         await repo.delete_message(conversation_id, user_message.id)
         raise BadRequestError("Ese fichero ya se envió en otro mensaje")
+
+    async def save_reply(content: str, status: MessageStatus) -> None:
+        await repo.add_message(conversation_id, "assistant", content, status)
+
+    async def undo_turn() -> None:
+        # The model failed before answering (rate limit, unreachable...): the turn didn't
+        # happen. The client puts the text back in the composer and the files are pending again.
+        await attachments.release(user_message.id)
+        await repo.delete_message(conversation_id, user_message.id)
+
+    response = await stream_reply(
+        llm,
+        model,
+        fitted.messages,
+        on_finish=save_reply,
+        params=params,
+        on_early_error=undo_turn,
+    )
+    # Only once the model has started answering does the conversation take its model and title.
     await repo.update(
         conversation_id,
         model=model,
         title=title_from_message(body.content) if is_first_message else None,
     )
-
-    async def save_reply(content: str, status: MessageStatus) -> None:
-        await repo.add_message(conversation_id, "assistant", content, status)
-
-    return await stream_reply(llm, model, fitted.messages, on_finish=save_reply, params=params)
+    return response

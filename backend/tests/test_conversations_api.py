@@ -67,24 +67,27 @@ async def test_send_streams_and_persists_the_turn(
     assert fake_llm.calls[0][0] == "m"
 
 
-async def test_history_skips_failed_turns_and_keeps_the_first_title(
+async def test_a_turn_that_fails_before_answering_is_undone(
     client: httpx.AsyncClient, fake_llm: FakeLLMProvider
 ) -> None:
     conversation_id = await create(client)
     fake_llm.fail_before = ModelUnavailableError()
     assert (await send(client, conversation_id, "uno")).status_code == 503
+    detail = (await client.get(f"/api/conversations/{conversation_id}")).json()
+    assert detail["messages"] == []  # nothing stored: the client puts the text back
+    assert detail["title"] == "Nueva conversación"
     fake_llm.fail_before = None
 
     await send(client, conversation_id, "dos")
 
     _, history = fake_llm.calls[-1]
-    assert [(m.role, m.content) for m in history[1:]] == [("user", "uno"), ("user", "dos")]
+    assert [(m.role, m.content) for m in history[1:]] == [("user", "dos")]
     detail = (await client.get(f"/api/conversations/{conversation_id}")).json()
-    assert detail["title"] == "uno"
-    assert [m["status"] for m in detail["messages"]] == ["done", "error", "done", "done"]
+    assert detail["title"] == "dos"
+    assert [m["status"] for m in detail["messages"]] == ["done", "done"]
 
 
-async def test_unknown_model_is_json_404_and_saved_as_error(
+async def test_unknown_model_is_json_404_and_the_turn_is_undone(
     client: httpx.AsyncClient, fake_llm: FakeLLMProvider
 ) -> None:
     conversation_id = await create(client)
@@ -95,10 +98,10 @@ async def test_unknown_model_is_json_404_and_saved_as_error(
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "MODEL_NOT_FOUND"
     detail = (await client.get(f"/api/conversations/{conversation_id}")).json()
-    assert detail["messages"][-1]["status"] == "error"
+    assert detail["messages"] == []
 
 
-async def test_empty_reply_is_a_json_error_and_saved_as_error(
+async def test_empty_reply_is_a_json_error_and_the_turn_is_undone(
     client: httpx.AsyncClient, fake_llm: FakeLLMProvider
 ) -> None:
     conversation_id = await create(client)
@@ -109,7 +112,7 @@ async def test_empty_reply_is_a_json_error_and_saved_as_error(
     assert response.status_code == 502
     assert response.json()["error"]["code"] == "EMPTY_REPLY"
     detail = (await client.get(f"/api/conversations/{conversation_id}")).json()
-    assert detail["messages"][-1]["status"] == "error"
+    assert detail["messages"] == []
 
 
 async def test_mid_stream_error_keeps_partial_reply(
