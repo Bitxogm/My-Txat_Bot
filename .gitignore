@@ -58,3 +58,6 @@ Thumbs.db
 # Logs
 logs/
 *.log
+
+# Informes de la batería de evaluación (salidas de modelos, no se versionan)
+evals/reports/

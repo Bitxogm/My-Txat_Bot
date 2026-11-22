@@ -7,16 +7,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.adapters.files.local_storage import LocalFileStorage, sweep_orphans
-from app.adapters.ollama.provider import (
-    OllamaProvider,
-    build_chat_timeout,
-    build_ollama_client,
-)
-from app.adapters.openai_compat.provider import (
-    OpenAICompatibleProvider,
-    build_openai_compatible_client,
-)
-from app.adapters.routing import RoutingLLMProvider
+from app.adapters.llm_factory import build_llm_provider
 from app.adapters.sqlite.attachments import SqliteAttachmentRepository
 from app.adapters.sqlite.conversations import SqliteConversationRepository
 from app.adapters.sqlite.database import connect, sqlite_path
@@ -50,32 +41,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        client = build_ollama_client(settings.ollama_base_url, settings.ollama_timeout_seconds)
-        chat_timeout = build_chat_timeout(
-            settings.ollama_timeout_seconds, settings.ollama_chat_read_timeout_seconds
-        )
-        ollama = OllamaProvider(client, chat_timeout, think=settings.ollama_think)
-        remotes: list[OpenAICompatibleProvider] = []
-        cloud_client = None
-        if settings.cloud_enabled:
-            cloud_client = build_openai_compatible_client(
-                settings.cloud_base_url,
-                settings.cloud_api_key.get_secret_value(),
-                settings.cloud_timeout_seconds,
-            )
-            remotes.append(
-                OpenAICompatibleProvider(
-                    cloud_client,
-                    settings.cloud_name,
-                    allowed_models=settings.cloud_model_list,
-                    vision_models=settings.cloud_vision_model_list,
-                    chat_timeout=build_chat_timeout(
-                        settings.cloud_timeout_seconds, settings.ollama_chat_read_timeout_seconds
-                    ),
-                )
-            )
-            logger.info("Cloud provider enabled: %s", settings.cloud_name)
-        app.state.llm_provider = RoutingLLMProvider(ollama, remotes)
+        llm, clients = build_llm_provider(settings)
+        app.state.llm_provider = llm
         db = await connect(sqlite_path(settings.database_url))
         app.state.conversations = SqliteConversationRepository(db)
         attachment_repo = SqliteAttachmentRepository(db)
@@ -99,9 +66,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             yield
         finally:
             await db.close()
-            await client.aclose()
-            if cloud_client is not None:
-                await cloud_client.aclose()
+            for http_client in clients:
+                await http_client.aclose()
 
     docs_enabled = not settings.is_production
     app = FastAPI(
