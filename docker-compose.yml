@@ -17,6 +17,10 @@ services:
         APP_GID: ${APP_GID:-1000}
     env_file:
       - ./backend/.env
+    environment:
+      # Wins over backend/.env: in Docker the API docs (/api/docs, /api/openapi.json) are
+      # always off, whatever the .env says.
+      APP_ENV: production
     volumes:
       - ./data:/app/data
     # Hardening (docs/security.md): the PDF/image parser child shares this user and filesystem.

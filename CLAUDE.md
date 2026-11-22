@@ -1,6 +1,6 @@
 # CLAUDE.md — Txat_bot
 
-Chatbot personal 100 % local sobre Ollama, con personalidad configurable y orientado a ayudar en labs/CTF autorizados. App de navegador (PWA), totalmente dockerizada.
+Chatbot personal sobre Ollama (local), con modelos en la nube opcionales vía Groq (ADR-012), personalidad configurable y orientado a ayudar en labs/CTF autorizados. App de navegador (PWA), totalmente dockerizada.
 
 ## Fase actual
 **Fase 3 (personalización)**: memoria persistente aprobada por el usuario, valoraciones 👍/👎 y exportación del dataset para el fine-tuning. Fases 0-2 cerradas (chat, login, conversaciones, personalidades, catálogo OSINT, adjuntos de texto/PDF/imágenes y PWA). Después: Conocimiento (RAG), Kali y modelo propio. Detalle en `docs/roadmap.md`. Actualiza esta línea al cambiar de fase.
@@ -102,6 +102,7 @@ Claude hace ramas, commits, push y PRs sin pedir permiso. Void revisa y mergea; 
 - Repo **público**: nunca commitear `.env`, bases de datos, uploads, modelos, IPs, nombres de host Tailscale reales ni datos personales. Solo `.env.example` con valores vacíos.
 - Acceso solo LAN + Tailscale. Puertos publicados en `BIND_ADDR`, nunca `0.0.0.0` por defecto. Sin cambios en el router ni túneles públicos.
 - Ollama no tiene auth: jamás exponerlo fuera de Tailscale/localhost.
+- Con un modelo `groq/...` el contenido (mensajes, ficheros, imágenes) sale a un tercero: nada de datos reales ni de clientes; para eso, modelos locales.
 - PWA (ADR-017): el service worker nunca maneja `/api` (sin `runtimeCaching`, `/api` fuera del `navigateFallback`). Solo funciona con HTTPS (`tailscale serve`, nunca `funnel`). La API responde `Cache-Control: no-store` por defecto.
 - Login de un usuario: hash argon2/bcrypt, cookie `httpOnly` + `SameSite=Strict`, nada en `localStorage`.
 - Asistente Kali: sugiere comandos, **nunca ejecuta sin confirmación explícita**. Uso solo en entornos propios o autorizados.

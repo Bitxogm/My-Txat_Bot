@@ -1,6 +1,6 @@
 # Txat_bot
 
-Chatbot personal que corre en local. Usa modelos abiertos servidos por Ollama, tiene personalidades configurables y está pensado como copiloto para laboratorios y CTF autorizados (Kali, HackMyVM, DockerLabs).
+Chatbot personal para tu red. Usa modelos abiertos servidos por Ollama en local y, si quieres, modelos en la nube vía Groq (opcional). Tiene personalidades configurables y está pensado como copiloto para laboratorios y CTF autorizados (Kali, HackMyVM, DockerLabs).
 
 > Estado: **Fase 3** (personalización). Ver [docs/roadmap.md](docs/roadmap.md).
 
@@ -79,6 +79,8 @@ Desarrollo sin Docker:
 ## Seguridad
 
 Solo para uso personal. Accesible únicamente desde la red de casa y Tailscale; nada se expone a internet. Detalles en [docs/security.md](docs/security.md).
+
+Con un modelo `groq/...` el contenido de la conversación (mensajes, ficheros e imágenes) sale a un tercero: nada de datos reales ni de clientes; para eso, modelos locales.
 
 La ayuda en hacking está pensada para entornos propios o con autorización explícita (labs, CTF).
 
