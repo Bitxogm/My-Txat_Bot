@@ -7,6 +7,8 @@ implements that subset works by changing CLOUD_BASE_URL.
 import base64
 import json
 import logging
+import math
+import re
 from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
@@ -158,9 +160,7 @@ class OpenAICompatibleProvider:
         if status == httpx.codes.NOT_FOUND and model:
             raise ModelNotFoundError(f"El modelo '{model}' no existe en {self.name}")
         if status == httpx.codes.TOO_MANY_REQUESTS:
-            retry_after = response.headers.get("retry-after")
-            headers = {"Retry-After": retry_after} if retry_after else None
-            raise ModelRateLimitedError(headers=headers)
+            raise ModelRateLimitedError.for_provider(self.name, retry_after(response.headers))
         raise ModelUnavailableError(f"{self.name} no está disponible ahora mismo")
 
     def _unavailable(self, exc: httpx.HTTPError) -> ModelUnavailableError:
@@ -190,6 +190,46 @@ def build_openai_compatible_client(
     return httpx.AsyncClient(
         base_url=base_url.rstrip("/"), headers=headers, timeout=timeout_seconds
     )
+
+
+RETRY_AFTER_MAX_SECONDS = 3600
+_DURATION_PART = re.compile(r"(\d+(?:\.\d+)?)(ms|h|m|s)")
+
+
+def _duration_seconds(value: str) -> float | None:
+    """Groq-style durations: "7.66s", "2m59.56s", "1h2m", "250ms"."""
+    value = value.strip()
+    parts = _DURATION_PART.findall(value)
+    if not parts or "".join(n + u for n, u in parts) != value:
+        return None
+    scale = {"h": 3600.0, "m": 60.0, "s": 1.0, "ms": 0.001}
+    return sum(float(n) * scale[u] for n, u in parts)
+
+
+def retry_after(headers: httpx.Headers) -> int | None:
+    """Seconds until the provider accepts requests again, rounded up and capped; None when it
+    doesn't say. Retry-After first; else the reset of the exhausted x-ratelimit-* bucket (both
+    buckets' longest when neither is reported as exhausted)."""
+    raw = headers.get("retry-after", "").strip()
+    seconds: float | None = None
+    try:
+        seconds = float(raw) if raw else None
+    except ValueError:
+        seconds = None
+    if seconds is None:
+        waits: list[float] = []
+        for bucket in ("tokens", "requests"):
+            reset = _duration_seconds(headers.get(f"x-ratelimit-reset-{bucket}", ""))
+            if reset is None:
+                continue
+            if headers.get(f"x-ratelimit-remaining-{bucket}", "").strip() == "0":
+                waits = [reset]
+                break
+            waits.append(reset)
+        seconds = max(waits) if waits else None
+    if seconds is None:
+        return None
+    return min(max(math.ceil(seconds), 1), RETRY_AFTER_MAX_SECONDS)
 
 
 def _parse(data: str) -> dict[str, Any]:
