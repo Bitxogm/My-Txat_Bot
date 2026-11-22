@@ -1,4 +1,11 @@
-import { useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react';
+import {
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
 import { PaperclipIcon, SendHorizontalIcon, SquareIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -21,6 +28,11 @@ interface ComposerProps {
   blockReason?: string | null;
   /** Shown above the input even without files. */
   notice?: string | null;
+  /** Controlled draft (e.g. to put back a message that could not be sent). */
+  draft?: string;
+  onDraftChange?: (text: string) => void;
+  /** Rendered right above the input (e.g. the rate-limit notice). */
+  banner?: ReactNode;
 }
 
 export function Composer({
@@ -35,8 +47,13 @@ export function Composer({
   filesNote = null,
   blockReason = null,
   notice = null,
+  draft: controlledDraft,
+  onDraftChange,
+  banner = null,
 }: ComposerProps) {
-  const [draft, setDraft] = useState('');
+  const [ownDraft, setOwnDraft] = useState('');
+  const draft = controlledDraft ?? ownDraft;
+  const setDraft = onDraftChange ?? setOwnDraft;
   const fileInput = useRef<HTMLInputElement>(null);
   const canSend = !disabled && !isStreaming && !isUploading && !blockReason && draft.trim() !== '';
   const canAttach = !disabled && !isStreaming && files.length < MAX_ATTACHMENTS;
@@ -93,6 +110,7 @@ export function Composer({
           </p>
         )}
         {notice && <p className="text-muted-foreground text-xs">{notice}</p>}
+        {banner}
         <div className="flex items-end gap-2">
           {onAttach && (
             <>
