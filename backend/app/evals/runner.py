@@ -5,7 +5,7 @@ import asyncio
 import re
 import time
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
@@ -28,12 +28,23 @@ class Result:
     seconds: float
     reasons: list[str]
     error: str | None = None
+    warnings: list[str] = field(default_factory=list)
 
     @property
     def status(self) -> str:
         if self.error or self.reasons:
             return "FALLO"
         return "REVISIÓN MANUAL" if self.question.manual else "OK"
+
+
+def graded(
+    question: Question, personality: str, answer: str, seconds: float, error: str | None
+) -> Result:
+    """A Result with the checks applied (also used to re-grade saved answers)."""
+    if error:
+        return Result(question, personality, answer, seconds, [], error)
+    verdict = check(question, answer)
+    return Result(question, personality, answer, seconds, verdict.reasons, None, verdict.warnings)
 
 
 def resolve_personality(name: str | None) -> tuple[str, PersonalityFields]:
@@ -94,13 +105,18 @@ async def ask(
             return Result(question, personality.name, "", elapsed, [], exc.code)
         # Only the successful attempt is timed: waiting out the rate limit isn't the model's time.
         elapsed = time.perf_counter() - started
-        return Result(question, personality.name, answer, elapsed, check(question, answer))
+        return graded(question, personality.name, answer, elapsed, None)
     raise AssertionError("unreachable")
 
 
-def report_path(folder: Path, model: str, think: bool | None, at: datetime) -> Path:
+def report_path(
+    folder: Path, model: str, think: bool | None, at: datetime, personality: str | None = None
+) -> Path:
+    """Markdown report path; the JSON with the raw answers goes next to it (.json)."""
     slug = re.sub(r"[^A-Za-z0-9._-]+", "-", model).strip("-")
     suffix = "" if think is None else ("-think-on" if think else "-think-off")
+    if personality:
+        suffix += "-" + re.sub(r"[^a-z0-9]+", "-", personality.lower()).strip("-")
     return folder / f"{at:%Y-%m-%d-%H%M}-{slug}{suffix}.md"
 
 
@@ -110,22 +126,23 @@ def _cell(text: str) -> str:
 
 def render_report(model: str, think: bool | None, results: list[Result], at: datetime) -> str:
     automatic = [r for r in results if r.status != "FALLO"]
+    warned = [r for r in results if r.warnings]
     seconds = sum(r.seconds for r in results) / len(results) if results else 0.0
     think_text = "" if think is None else f" · razonamiento {'on' if think else 'off'}"
     lines = [
         f"# Evaluación · {model}{think_text}",
         "",
         f"{at:%Y-%m-%d %H:%M} · {len(automatic)}/{len(results)} superan las comprobaciones"
-        f" automáticas · {seconds:.1f} s de media",
+        f" automáticas · {len(warned)} con avisos · {seconds:.1f} s de media",
         "",
-        "| # | Personalidad | Resultado | Motivo | Segundos | Longitud |",
-        "| --- | --- | --- | --- | ---: | ---: |",
+        "| # | Personalidad | Resultado | Motivo | Avisos | Segundos | Longitud |",
+        "| --- | --- | --- | --- | --- | ---: | ---: |",
     ]
     for r in results:
         reason = r.error or "; ".join(r.reasons) or (r.question.manual or "")
         lines.append(
             f"| {r.question.id} | {r.personality} | {r.status} | {_cell(reason)}"
-            f" | {r.seconds:.1f} | {len(r.answer)} |"
+            f" | {_cell('; '.join(r.warnings))} | {r.seconds:.1f} | {len(r.answer)} |"
         )
     lines.append("")
     for r in results:
