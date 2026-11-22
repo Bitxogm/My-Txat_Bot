@@ -51,6 +51,7 @@ def build_llm_provider(
                 ),
                 local=config.local,
                 key_variable=config.key_variable,
+                reasoning_effort=config.reasoning_effort,
             )
         )
         logger.info("Provider enabled: %s (%s)", config.name, "local" if config.local else "remote")

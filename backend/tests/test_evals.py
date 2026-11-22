@@ -266,3 +266,69 @@ def test_p1_and_p3_shipped_rules() -> None:
     assert fails(p1, f"{SPANISH} pip install exiftool")
     assert fails(p3, f"{SPANISH} nmap -sV -p- 10.0.0.1") == []
     assert fails(p3, f"{SPANISH} nmap -sV --version-detection -p- 10.0.0.1")
+
+
+# --- any provider (PR 5) ----------------------------------------------------------------------
+
+
+def test_base_prompt_version_is_a_short_fingerprint() -> None:
+    from app.domain.prompts import BASE_PROMPT_VERSION
+
+    assert re.fullmatch(r"[0-9a-f]{8}", BASE_PROMPT_VERSION)
+
+
+def test_run_info_goes_into_the_report_and_the_json() -> None:
+    from app.evals.runner import RunInfo
+    from app.evals.store import run_from_json, run_to_json
+
+    at = datetime(2026, 11, 22, 9, 0)
+    info = RunInfo(provider="lmstudio", local=True, base_version="abcd1234")
+    text = render_report("lmstudio/qwen", None, _results(), at, info)
+    run = run_from_json(run_to_json("lmstudio/qwen", None, at, _results(), info))
+
+    assert "proveedor lmstudio (local) · capa base abcd1234" in text
+    assert run.info == info
+
+
+def _fake_cli(monkeypatch: pytest.MonkeyPatch) -> FakeLLMProvider:
+    from app.domain.chat import ModelInfo
+
+    llm = FakeLLMProvider()
+    llm.models = [
+        ModelInfo(name="qwen3.5:9b", size_bytes=1),
+        ModelInfo(name="lmstudio/qwen3.6", size_bytes=0, provider="lmstudio"),
+    ]
+    llm.chunks = [SPANISH]
+    monkeypatch.setattr("app.adapters.llm_factory.build_llm_provider", lambda *_a, **_k: (llm, []))
+    return llm
+
+
+def test_list_models_prints_ids_and_where_they_run(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from app.cli import main
+
+    _fake_cli(monkeypatch)
+
+    assert main(["eval", "--list-models"]) == 0
+
+    out = capsys.readouterr().out
+    assert "lmstudio/qwen3.6  [lmstudio, local]" in out
+    assert "qwen3.5:9b  [ollama, local]" in out
+
+
+def test_unknown_models_are_skipped_not_fatal(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from app.cli import main
+
+    _fake_cli(monkeypatch)
+
+    code = main(
+        ["eval", "--models", "nope:1b", "lmstudio/qwen3.6", "--only", "6", "--out", str(tmp_path)]
+    )
+
+    assert code == 1  # one model was skipped
+    assert "nope:1b: no está disponible" in capsys.readouterr().err
+    [report] = tmp_path.glob("*.md")
+    assert "proveedor lmstudio (local)" in report.read_text(encoding="utf-8")

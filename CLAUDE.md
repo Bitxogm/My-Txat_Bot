@@ -34,6 +34,7 @@ uv run python -m app.cli session-secret # SESSION_SECRET
 uv run python -m app.cli dev-login      # solo local: credenciales aleatorias + tarjeta de acceso rápido
 uv run python -m app.cli eval --models qwen3.5:9b [--think on|off] [--personality Pentester]  # batería evals/questions.yaml -> evals/reports/ (no va en CI)
 uv run python -m app.cli eval --recheck ../evals/reports/<informe>.md   # re-corrige sin llamar al modelo
+uv run python -m app.cli eval --list-models                            # ids de modelos de todos los proveedores
 
 # frontend (desde frontend/)
 npm run dev                             # :5173, proxy /api -> VITE_DEV_BACKEND_URL (def. :8000)

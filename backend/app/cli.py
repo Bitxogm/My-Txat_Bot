@@ -24,7 +24,7 @@ from argon2 import PasswordHasher
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from app.evals.runner import Result
+    from app.evals.runner import Result, RunInfo
 
 MIN_PASSWORD_LENGTH = 12
 MIN_SESSION_SECRET_LENGTH = 32
@@ -162,8 +162,10 @@ def run_evals(
 
     from app.adapters.llm_factory import build_llm_provider
     from app.core.config import get_settings
+    from app.core.errors import AppError
+    from app.domain.prompts import BASE_PROMPT_VERSION
     from app.evals.checks import load_questions
-    from app.evals.runner import Result, ask, report_path, resolve_personality
+    from app.evals.runner import Result, RunInfo, ask, report_path, resolve_personality
 
     try:
         questions = load_questions(questions_file)
@@ -180,11 +182,25 @@ def run_evals(
     think_flag = None if think is None else think == "on"
     settings = get_settings()
 
-    async def run() -> list[tuple[str, bool | None, list[Result]]]:
+    async def run() -> list[tuple[str, bool | None, RunInfo, list[Result]]]:
         llm, clients = build_llm_provider(settings, think=think_flag)
-        runs: list[tuple[str, bool | None, list[Result]]] = []
+        runs: list[tuple[str, bool | None, RunInfo, list[Result]]] = []
         try:
+            # Checked before asking anything: an unknown model or a provider that is down is
+            # skipped with a warning instead of failing all its questions.
+            try:
+                available = {m.name: m for m in await llm.list_models()}
+            except AppError as exc:
+                sys.stderr.write(f"No se pueden listar los modelos ({exc.code}).\n")
+                return runs
             for model in models:
+                info = available.get(model)
+                if info is None:
+                    sys.stderr.write(
+                        f"{model}: no está disponible (¿proveedor apagado o id mal escrito?);"
+                        " se omite. Usa --list-models para ver los ids.\n"
+                    )
+                    continue
                 # Reasoning (--think) is an Ollama option: other providers don't take it.
                 not_ollama = settings.provider_for(model) is not None
                 model_think = (
@@ -200,7 +216,12 @@ def run_evals(
                     )
                     sys.stdout.flush()
                     results.append(result)
-                runs.append((model, model_think, results))
+                run_info = RunInfo(
+                    provider=info.provider,
+                    local=not info.remote,
+                    base_version=BASE_PROMPT_VERSION,
+                )
+                runs.append((model, model_think, run_info, results))
         finally:
             for client in clients:
                 await client.aclose()
@@ -209,20 +230,54 @@ def run_evals(
     runs = asyncio.run(run())
     out_dir.mkdir(parents=True, exist_ok=True)
     now = datetime.now()
-    for model, model_think, results in runs:
+    for model, model_think, run_info, results in runs:
         path = report_path(out_dir, model, model_think, now, personality)
-        _write_report(path, model, model_think, results, now)
-    return 0
+        _write_report(path, model, model_think, results, now, run_info)
+    return 0 if len(runs) == len(models) else 1
+
+
+def list_models() -> int:
+    """Models the eval can use, with their exact id (e.g. the one LM Studio gives a model)."""
+    import asyncio
+
+    from app.adapters.llm_factory import build_llm_provider
+    from app.core.config import get_settings
+    from app.core.errors import AppError
+
+    async def run() -> int:
+        llm, clients = build_llm_provider(get_settings())
+        try:
+            models = await llm.list_models()
+        except AppError as exc:
+            sys.stderr.write(f"No se pueden listar los modelos ({exc.code}).\n")
+            return 1
+        finally:
+            for client in clients:
+                await client.aclose()
+        for m in sorted(models, key=lambda m: (m.provider, m.name)):
+            where = "nube" if m.remote else "local"
+            vision = " · ve imágenes" if m.vision else ""
+            sys.stdout.write(f"{m.name}  [{m.provider}, {where}{vision}]\n")
+        return 0
+
+    return asyncio.run(run())
 
 
 def _write_report(
-    path: Path, model: str, think: bool | None, results: "list[Result]", at: "datetime"
+    path: Path,
+    model: str,
+    think: bool | None,
+    results: "list[Result]",
+    at: "datetime",
+    info: "RunInfo | None" = None,
 ) -> None:
     from app.evals.runner import render_report
     from app.evals.store import run_to_json
 
-    path.write_text(render_report(model, think, results, at), encoding="utf-8")
-    path.with_suffix(".json").write_text(run_to_json(model, think, at, results), encoding="utf-8")
+    path.write_text(render_report(model, think, results, at, info), encoding="utf-8")
+    path.with_suffix(".json").write_text(
+        run_to_json(model, think, at, results, info), encoding="utf-8"
+    )
     passed = sum(1 for r in results if r.status != "FALLO")
     warned = sum(1 for r in results if r.warnings)
     sys.stdout.write(
@@ -253,7 +308,7 @@ def recheck_evals(reports: list[Path], questions_file: Path) -> int:
         if missing:
             sys.stderr.write(f"{report}: preguntas que ya no están: {', '.join(missing)}\n")
         sys.stdout.write(f"{report.name} (respuestas leídas de {source}) -> ")
-        _write_report(report.with_suffix(".md"), run.model, run.think, results, run.at)
+        _write_report(report.with_suffix(".md"), run.model, run.think, results, run.at, run.info)
     return status
 
 
@@ -265,7 +320,12 @@ def main(argv: list[str] | None = None) -> int:
     dev = sub.add_parser("dev-login", help="Credenciales locales de desarrollo + tarjeta de acceso")
     dev.add_argument("--force", action="store_true", help="Sustituir una contraseña existente")
     ev = sub.add_parser("eval", help="Batería de evaluación de respuestas (evals/questions.yaml)")
-    ev.add_argument("--models", nargs="+", help="Modelos, p. ej. qwen3.5:9b")
+    ev.add_argument(
+        "--models", nargs="+", help="Modelos, p. ej. qwen3.5:9b lmstudio/<id> groq/<id>"
+    )
+    ev.add_argument(
+        "--list-models", action="store_true", help="Lista los modelos disponibles y sus ids"
+    )
     ev.add_argument(
         "--recheck",
         nargs="+",
@@ -281,11 +341,13 @@ def main(argv: list[str] | None = None) -> int:
     ev.add_argument("--out", type=Path, default=EVALS_DIR / "reports")
     ev.add_argument("--only", nargs="+", help="Solo estos ids de pregunta")
     args = parser.parse_args(argv)
+    if args.command == "eval" and args.list_models:
+        return list_models()
     if args.command == "eval" and args.recheck:
         return recheck_evals(args.recheck, args.questions)
     if args.command == "eval":
         if not args.models:
-            parser.error("eval necesita --models o --recheck")
+            parser.error("eval necesita --models, --recheck o --list-models")
         return run_evals(
             args.models, args.think, args.personality, args.questions, args.out, args.only
         )
