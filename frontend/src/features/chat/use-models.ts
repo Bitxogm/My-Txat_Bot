@@ -10,6 +10,8 @@ export interface UseModels {
   select: (name: string) => void;
   status: ModelsStatus;
   reload: () => void;
+  /** DEFAULT_MODEL of the backend, if it is in the list. */
+  defaultModel: string | null;
 }
 
 function pickInitial(models: ModelInfo[], defaultModel: string | null): string {
@@ -22,12 +24,18 @@ export function useModels(): UseModels {
   const [selected, setSelected] = useState('');
   const [status, setStatus] = useState<ModelsStatus>('loading');
   const [attempt, setAttempt] = useState(0);
+  const [defaultModel, setDefaultModel] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
     listModels(controller.signal).then(
       (response) => {
         setModels(response.models);
+        setDefaultModel(
+          response.models.some((m) => m.name === response.default_model)
+            ? response.default_model
+            : null,
+        );
         setSelected((current) =>
           response.models.some((m) => m.name === current)
             ? current
@@ -49,5 +57,5 @@ export function useModels(): UseModels {
     setAttempt((n) => n + 1);
   }, []);
 
-  return { models, selected, select: setSelected, status, reload };
+  return { models, selected, select: setSelected, status, reload, defaultModel };
 }

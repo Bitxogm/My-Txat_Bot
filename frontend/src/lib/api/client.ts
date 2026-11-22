@@ -23,7 +23,26 @@ export interface RequestOptions {
 }
 
 interface ErrorBody {
-  error: { code: string; message: string; request_id: string };
+  error: {
+    code: string;
+    message: string;
+    request_id: string;
+    provider?: unknown;
+    retry_after?: unknown;
+  };
+}
+
+/** Optional fields of MODEL_RATE_LIMITED, validated (never trust the shape of a body). */
+export function rateLimitFields(raw: { provider?: unknown; retry_after?: unknown }): {
+  provider: string | null;
+  retryAfter: number | null;
+} {
+  const retry = raw.retry_after;
+  return {
+    provider: typeof raw.provider === 'string' ? raw.provider : null,
+    retryAfter:
+      typeof retry === 'number' && Number.isFinite(retry) && retry >= 0 ? Math.ceil(retry) : null,
+  };
 }
 
 function isErrorBody(value: unknown): value is ErrorBody {
@@ -54,6 +73,7 @@ export async function toApiError(response: Response): Promise<ApiError> {
     code: error?.code ?? `HTTP_${response.status}`,
     message: error?.message ?? fallbackMessage(kind),
     requestId: error?.request_id ?? response.headers.get(REQUEST_ID_HEADER),
+    ...(error ? rateLimitFields(error) : {}),
   });
 }
 

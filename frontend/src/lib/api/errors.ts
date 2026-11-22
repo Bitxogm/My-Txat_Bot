@@ -15,6 +15,10 @@ export interface ApiErrorInit {
   status: number | null;
   code: string;
   requestId: string | null;
+  /** MODEL_RATE_LIMITED: the provider that hit its limit. */
+  provider?: string | null;
+  /** MODEL_RATE_LIMITED: seconds until it accepts requests again (null if unknown). */
+  retryAfter?: number | null;
 }
 
 export class ApiError extends Error {
@@ -22,14 +26,18 @@ export class ApiError extends Error {
   readonly status: number | null;
   readonly code: string;
   readonly requestId: string | null;
+  readonly provider: string | null;
+  readonly retryAfter: number | null;
 
-  constructor({ kind, message, status, code, requestId }: ApiErrorInit) {
+  constructor({ kind, message, status, code, requestId, provider, retryAfter }: ApiErrorInit) {
     super(message);
     this.name = 'ApiError';
     this.kind = kind;
     this.status = status;
     this.code = code;
     this.requestId = requestId;
+    this.provider = provider ?? null;
+    this.retryAfter = retryAfter ?? null;
   }
 }
 

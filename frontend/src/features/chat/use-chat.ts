@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ApiError,
   createConversation,
   getConversation,
   isAbortError,
@@ -14,6 +15,8 @@ import { notifyError } from '@/lib/notify-error';
 
 export type MessageStatus = StoredStatus | 'streaming';
 
+export const RATE_LIMITED = 'MODEL_RATE_LIMITED';
+
 export interface UiMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -21,6 +24,21 @@ export interface UiMessage {
   status: MessageStatus;
   /** Files sent with a user message. */
   attachments: MessageAttachment[];
+}
+
+/**
+ * The model failed before answering (HTTP error before the stream): the server did not keep the
+ * turn (ADR-019), so it is taken off the screen and its text goes back to the composer.
+ */
+export interface FailedSend {
+  text: string;
+  error: ApiError;
+}
+
+export interface SendResult {
+  /** The conversation, created by this send if it was a new chat (null if that failed). */
+  conversationId: string | null;
+  failed: FailedSend | null;
 }
 
 export interface UseChatOptions {
@@ -44,14 +62,15 @@ export interface UseChat {
   ensureConversation: (model: string, personalityId?: string) => Promise<string | null>;
   /**
    * `personalityId` only matters for the first message, which creates the conversation.
-   * Resolves with the conversation id (null if it couldn't be created or nothing was sent).
+   * Never rejects: a failure before the reply comes back in `failed` (already notified, except
+   * a rate limit, which the page shows itself).
    */
   send: (
     content: string,
     model: string,
     personalityId?: string,
     attachments?: MessageAttachment[],
-  ) => Promise<string | null>;
+  ) => Promise<SendResult>;
   stop: () => void;
 }
 
@@ -175,7 +194,8 @@ export function useChat({ onActivity }: UseChatOptions = {}): UseChat {
       attachments: MessageAttachment[] = [],
     ) => {
       const text = content.trim();
-      if (!text || streamRef.current) return null;
+      if (!text || streamRef.current)
+        return { conversationId: conversationRef.current, failed: null };
 
       const controller = new AbortController();
       streamRef.current = controller;
@@ -190,6 +210,8 @@ export function useChat({ onActivity }: UseChatOptions = {}): UseChat {
       ]);
 
       let id: string | null = conversationRef.current;
+      let received = false;
+      let failed: FailedSend | null = null;
       try {
         id = await createIfNeeded(model, personalityId);
         const body =
@@ -198,13 +220,20 @@ export function useChat({ onActivity }: UseChatOptions = {}): UseChat {
             : { content: text, model };
         await sendMessage(id, body, {
           signal: controller.signal,
-          onToken: (token) =>
-            updateMessage(assistantId, (m) => ({ ...m, content: m.content + token })),
+          onToken: (token) => {
+            received = true;
+            updateMessage(assistantId, (m) => ({ ...m, content: m.content + token }));
+          },
         });
         updateMessage(assistantId, (m) => ({ ...m, status: 'done' }));
       } catch (error) {
         if (isAbortError(error)) {
           updateMessage(assistantId, (m) => ({ ...m, status: 'stopped' }));
+        } else if (error instanceof ApiError && error.status !== null && !received) {
+          // An HTTP error before the stream: nothing was stored, nothing stays on screen.
+          setMessages((prev) => prev.filter((m) => m.id !== userId && m.id !== assistantId));
+          if (error.code !== RATE_LIMITED) notifyError(error);
+          failed = { text, error };
         } else {
           notifyError(error);
           updateMessage(assistantId, (m) => ({ ...m, status: 'error' }));
@@ -214,7 +243,7 @@ export function useChat({ onActivity }: UseChatOptions = {}): UseChat {
         setIsStreaming(false);
         onActivityRef.current?.();
       }
-      return id;
+      return { conversationId: id, failed };
     },
     [createIfNeeded, updateMessage],
   );

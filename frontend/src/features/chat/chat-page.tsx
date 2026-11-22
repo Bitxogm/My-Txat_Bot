@@ -18,10 +18,11 @@ import {
 } from '@/features/personalities/use-personalities';
 import type { Personality } from '@/lib/api';
 import { Composer } from './composer';
+import { RateLimitNotice, type RateLimit } from './rate-limit-notice';
 import { useAttachments } from './use-attachments';
 import { MessageList } from './message-list';
 import { ModelSelect } from './model-select';
-import { useChat } from './use-chat';
+import { RATE_LIMITED, useChat } from './use-chat';
 import { useModels } from './use-models';
 
 interface ChatPageProps {
@@ -30,11 +31,13 @@ interface ChatPageProps {
 }
 
 export function ChatPage({ username, onLogout }: ChatPageProps) {
-  const { models, selected, select, status, reload } = useModels();
+  const { models, selected, select, status, reload, defaultModel } = useModels();
   const conversations = useConversations();
   const chat = useChat({ onActivity: conversations.refresh });
   const personalities = usePersonalities();
   const attachments = useAttachments();
+  const [draft, setDraft] = useState('');
+  const [rateLimit, setRateLimit] = useState<RateLimit | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [page, setPage] = useState<SettingsPage | null>(null);
   const [personalityId, setPersonalityId] = useState(DEFAULT_PERSONALITY_ID);
@@ -55,6 +58,7 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
   async function openConversation(id: string) {
     setSidebarOpen(false);
     setPage(null);
+    setRateLimit(null);
     const detail = await chat.open(id);
     // Files uploaded earlier and never sent come back to the composer.
     void attachments.load(detail ? id : null);
@@ -64,6 +68,7 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
   function startNew() {
     setSidebarOpen(false);
     setPage(null);
+    setRateLimit(null);
     setPersonalityId(DEFAULT_PERSONALITY_ID);
     attachments.clear();
     chat.startNew();
@@ -87,12 +92,34 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
     if (chat.conversationId) void attachments.remove(chat.conversationId, key);
   }
 
-  async function sendWithFiles(content: string) {
+  async function sendWithFiles(content: string, model: string = selected) {
     const files = attachments.ready;
     if (files.length > 0) attachments.clear();
-    const id = await chat.send(content, selected, personalityId, files);
+    setRateLimit(null);
+    setDraft('');
+    const { conversationId, failed } = await chat.send(content, model, personalityId, files);
     // Resync: whatever the server did not take (e.g. the send failed) shows up again.
-    if (files.length > 0) void attachments.load(id);
+    if (files.length > 0) void attachments.load(conversationId);
+    if (!failed) return;
+    // The turn was undone (ADR-019): the text goes back as it was, nothing to retype.
+    setDraft(failed.text);
+    if (failed.error.code === RATE_LIMITED) {
+      const seconds = failed.error.retryAfter;
+      setRateLimit({
+        provider: failed.error.provider ?? model.split('/')[0],
+        until: seconds === null ? null : Date.now() + seconds * 1000,
+      });
+    }
+  }
+
+  // The local fallback: DEFAULT_MODEL, only if it is available here and doesn't leave the machine.
+  const localFallback =
+    defaultModel && models.some((m) => m.name === defaultModel && !m.remote) ? defaultModel : null;
+
+  function answerWithLocal() {
+    if (!localFallback || !draft.trim()) return;
+    select(localFallback); // only because the user pressed the button
+    void sendWithFiles(draft, localFallback);
   }
 
   const selectedModel = models.find((m) => m.name === selected);
@@ -211,6 +238,19 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
             )}
             <Composer
               onSend={(content) => void sendWithFiles(content)}
+              draft={draft}
+              onDraftChange={setDraft}
+              banner={
+                rateLimit && (
+                  <RateLimitNotice
+                    key={rateLimit.until ?? 'unknown'}
+                    limit={rateLimit}
+                    localModel={localFallback}
+                    onUseLocal={answerWithLocal}
+                    disabled={chat.isStreaming || attachments.isUploading}
+                  />
+                )
+              }
               onStop={chat.stop}
               isStreaming={chat.isStreaming}
               disabled={!selected || chat.isLoading}
