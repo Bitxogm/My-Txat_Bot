@@ -15,12 +15,13 @@ backend (FastAPI) ──── SQLite (data/txatbot.db) + uploads (data/uploads/
    │    └──────────▶ proveedores compatibles con OpenAI (Groq en la nube, LM Studio local…)
    │  HTTP, 127.0.0.1 / host.docker.internal (misma máquina)
    ▼
-Ollama (puerto 11434, GPU) · LM Studio (puerto 1234)
+Ollama (puerto 11434, GPU: todos los modelos locales, ADR-020)
 ```
 
 - **frontend**: SPA React. Todo acceso a la API pasa por un único cliente (`src/lib/api`).
 - **backend**: FastAPI asíncrono. Orquesta conversaciones, personalidades, ficheros y llamadas al modelo.
 - **Ollama**: servicio aparte en la misma máquina (instalado en el host, o en el Compose con el perfil `ollama`). Escucha solo en `127.0.0.1`; el backend en Docker llega por `host.docker.internal` (Docker Desktop lo reenvía al loopback del host) o por `ollama:11434`.
+- **Un solo motor local (ADR-020)**: todos los modelos locales en Ollama, que comparte la GPU entre ellos cargando y descargando al cambiar de modelo. LM Studio u otro servidor local solo si tiene su propia GPU o máquina.
 - **Despliegue previsto**: una sola máquina (torre Acer, RTX 3060 12 GB) con todo dentro. Acceso por la LAN de casa (frontend en `BIND_ADDR`); backend, Ollama y LM Studio solo en `127.0.0.1`. Tailscale es opcional (acceso desde fuera de casa o HTTPS para la PWA).
 - **Proveedores compatibles con OpenAI (opcionales, ADR-019)**: los de `PROVIDERS`, cada uno con su `PROVIDER_<NOMBRE>_*`. Remotos (Groq) o locales (`_LOCAL=true`: LM Studio, llama.cpp).
 - **Datos**: SQLite en `data/`, montado como volumen. Uploads en `data/uploads/`.

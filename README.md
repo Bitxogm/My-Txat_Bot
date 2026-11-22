@@ -10,7 +10,7 @@ Chatbot personal para tu red. Usa modelos abiertos servidos por Ollama en local 
 - Login de un solo usuario (cookie httpOnly).
 - Selector de modelo:
   - Locales: los de Ollama.
-  - Otros proveedores compatibles con OpenAI (opcional, varios a la vez): Groq en su plan gratuito, OpenRouter, LM Studio o llama.cpp en local… Lo que se envía a un modelo de la nube sale de tu red.
+  - Otros proveedores compatibles con OpenAI (opcional, varios a la vez): Groq en su plan gratuito, OpenRouter, o un servidor local con su propia GPU (LM Studio, llama.cpp)… Los modelos locales que comparten GPU van todos en Ollama (ADR-020). Lo que se envía a un modelo de la nube sale de tu red.
 - 8 personalidades incorporadas (Mentor CTF, Pentester, Auditor de Huella Digital…) más las tuyas, editables. Los límites éticos van en una capa base fija.
 - Catálogo de fuentes OSINT para el Auditor de Huella Digital.
 - Adjuntos: ficheros de texto (logs, salidas de nmap, código…), PDF e imágenes. Las imágenes solo se envían a modelos con visión.
