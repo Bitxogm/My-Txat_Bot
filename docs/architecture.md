@@ -4,7 +4,7 @@
 
 ```
 Navegador (PWA)
-   │  HTTP/SSE, solo LAN o Tailscale
+   │  HTTP/SSE, LAN de casa (Tailscale opcional)
    ▼
 frontend (Vite build servido por nginx)
    │  /api/*
@@ -13,14 +13,15 @@ backend (FastAPI) ──── SQLite (data/txatbot.db) + uploads (data/uploads/
    │    │           └── ChromaDB (futuro, RAG)
    │    │  HTTPS (opcional, sale de la red)
    │    └──────────▶ proveedores compatibles con OpenAI (Groq en la nube, LM Studio local…)
-   │  HTTP, Tailscale
+   │  HTTP, 127.0.0.1 / host.docker.internal (misma máquina)
    ▼
-Ollama (máquina con GPU, puerto 11434)
+Ollama (puerto 11434, GPU) · LM Studio (puerto 1234)
 ```
 
 - **frontend**: SPA React. Todo acceso a la API pasa por un único cliente (`src/lib/api`).
 - **backend**: FastAPI asíncrono. Orquesta conversaciones, personalidades, ficheros y llamadas al modelo.
-- **Ollama**: servicio aparte. Por defecto remoto (Acer con RTX 3060 vía Tailscale). Opcionalmente en el mismo Compose con el perfil `ollama`.
+- **Ollama**: servicio aparte en la misma máquina (instalado en el host, o en el Compose con el perfil `ollama`). Escucha solo en `127.0.0.1`; el backend en Docker llega por `host.docker.internal` (Docker Desktop lo reenvía al loopback del host) o por `ollama:11434`.
+- **Despliegue previsto**: una sola máquina (torre Acer, RTX 3060 12 GB) con todo dentro. Acceso por la LAN de casa (frontend en `BIND_ADDR`); backend, Ollama y LM Studio solo en `127.0.0.1`. Tailscale es opcional (acceso desde fuera de casa o HTTPS para la PWA).
 - **Proveedores compatibles con OpenAI (opcionales, ADR-019)**: los de `PROVIDERS`, cada uno con su `PROVIDER_<NOMBRE>_*`. Remotos (Groq) o locales (`_LOCAL=true`: LM Studio, llama.cpp).
 - **Datos**: SQLite en `data/`, montado como volumen. Uploads en `data/uploads/`.
 
@@ -82,6 +83,7 @@ Requieren sesión. Persisten en SQLite (`data/txatbot.db`) vía `ConversationRep
 - `PATCH /api/conversations/{id}` `{ title }` · `DELETE /api/conversations/{id}` → 204.
 - `POST /api/conversations/{id}/messages` `{ content, model?, attachment_ids? }` → mismo SSE que `/api/chat`. El servidor guarda el mensaje del usuario, antepone el system prompt compuesto (base + snapshot de la personalidad), construye el historial desde la base de datos y guarda la respuesta como `done`, `stopped` (el cliente cortó) o `error` (con el texto parcial). El primer mensaje da el título.
 - Los turnos con error y las respuestas vacías no se reenvían al modelo.
+- Si el modelo falla **antes del primer token** (límite 429, servidor caído, modelo inexistente, respuesta vacía), el turno se deshace: se borra el mensaje del usuario, sus adjuntos vuelven a pendientes y la conversación no cambia de modelo ni de título. El cliente devuelve el texto al compositor. Un fallo a mitad de respuesta sí se guarda (`error`, con el texto parcial).
 - Ajuste al contexto (ADR-018, `domain/context.py`): antes de guardar nada, el historial se recorta para caber en el contexto del modelo (`num_ctx` de la personalidad, si no `OLLAMA_NUM_CTX`; `PROVIDER_<NOMBRE>_CONTEXT_TOKENS` en los proveedores compatibles con OpenAI), dejando sitio para la respuesta. Se conservan los turnos más nuevos; los antiguos pierden primero las imágenes, luego el contenido de sus ficheros y, al final, desaparecen, y el modelo recibe una nota de cuántos se omitieron. Si ni el mensaje nuevo cabe (con sus ficheros recortados) → 400 `CONTEXT_TOO_LONG`, sin guardarlo. `/api/chat` se ajusta igual.
 
 ## Ficheros adjuntos (ADR-015, ADR-016)
@@ -155,6 +157,8 @@ frontend/src/
 - 401 dispara el handler registrado con `setUnauthorizedHandler` (redirección a login).
 - `streamChat` lee el SSE con `fetch` + `ReadableStream`; un evento `error` o un corte sin `done` también lanzan `ApiError`. Las cancelaciones (`AbortSignal`) se relanzan tal cual (`isAbortError`).
 - `notifyError(error)` (`src/lib/notify-error.ts`) muestra el toast; ignora cancelaciones.
+- Fallo antes de la respuesta (error HTTP antes del stream): el backend no guarda el turno (ADR-019) y el chat tampoco lo deja en pantalla; el texto vuelve al compositor tal cual y los adjuntos a pendientes.
+- Límite de un proveedor (`MODEL_RATE_LIMITED`, con `provider` y `retry_after` en `ApiError`): en vez de toast, aviso sobre el compositor "Límite de <proveedor> alcanzado. Disponible en N s" con cuenta atrás y, si `DEFAULT_MODEL` está en la lista y es local, el botón "Responder ahora con <modelo>", que reenvía el mismo texto y los mismos adjuntos con ese modelo. El modelo nunca cambia sin esa pulsación.
 
 **PWA (ADR-017)**
 - `vite-plugin-pwa` (`frontend/src/pwa/options.ts`): `generateSW`, precache del shell y nada más; `/api` nunca pasa por el service worker.
@@ -170,7 +174,7 @@ frontend/src/
 
 | Máquina | GPU | Rol |
 | --- | --- | --- |
-| Acer (Kali) | RTX 3060 12 GB | Host de Ollama ahora |
-| X570 (Ubuntu) | Posible 2x RTX 3060 en el futuro | Desarrollo |
+| Acer (torre) | RTX 3060 12 GB | Despliegue previsto: todo en esta máquina |
+| X570 (Ubuntu, Docker Desktop) | Posible 2x RTX 3060 en el futuro | Desarrollo |
 
 Con 12 GB de VRAM el techo práctico son modelos de 7-14B cuantizados (Q4/Q5) con contexto moderado. Modelos más grandes o varios a la vez no caben; el selector debe mostrar solo lo que Ollama tiene cargado o disponible.

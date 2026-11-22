@@ -1,5 +1,6 @@
 import logging
 from http import HTTPStatus
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -18,10 +19,18 @@ class AppError(Exception):
     code: str = "INTERNAL_ERROR"
     message: str = "Error interno del servidor"
 
-    def __init__(self, message: str | None = None, headers: dict[str, str] | None = None) -> None:
+    def __init__(
+        self,
+        message: str | None = None,
+        headers: dict[str, str] | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> None:
         if message is not None:
             self.message = message
         self.headers = headers or {}
+        # Extra fields for the error body, next to code/message/request_id. Only for errors the
+        # client acts on (e.g. MODEL_RATE_LIMITED: provider and retry_after).
+        self.details = details or {}
         super().__init__(self.message)
 
 
@@ -165,6 +174,19 @@ class ModelRateLimitedError(AppError):
     code = "MODEL_RATE_LIMITED"
     message = "Se ha alcanzado el límite de uso del proveedor en la nube. Espera un poco."
 
+    @classmethod
+    def for_provider(cls, provider: str, retry_after: int | None) -> "ModelRateLimitedError":
+        """The body carries `provider` and `retry_after` (seconds, or null if unknown) so the
+        client can say when it can try again; Retry-After goes as a header too."""
+        if retry_after is None:
+            message = f"Límite de {provider} alcanzado. Espera un poco antes de reintentar."
+        else:
+            message = f"Límite de {provider} alcanzado, disponible en {retry_after} s."
+        headers = {"Retry-After": str(retry_after)} if retry_after is not None else None
+        return cls(
+            message, headers=headers, details={"provider": provider, "retry_after": retry_after}
+        )
+
 
 class ModelNotFoundError(AppError):
     status_code = HTTPStatus.NOT_FOUND
@@ -183,11 +205,14 @@ _HTTP_STATUS_CODES: dict[int, str] = {
 }
 
 
-def error_response(status_code: int, code: str, message: str) -> JSONResponse:
+def error_response(
+    status_code: int, code: str, message: str, details: dict[str, Any] | None = None
+) -> JSONResponse:
     request_id = get_request_id()
+    body = {**(details or {}), "code": code, "message": message, "request_id": request_id}
     return JSONResponse(
         status_code=status_code,
-        content={"error": {"code": code, "message": message, "request_id": request_id}},
+        content={"error": body},
         headers={REQUEST_ID_HEADER: request_id},
     )
 
@@ -199,7 +224,7 @@ def internal_error_response() -> JSONResponse:
 async def _handle_app_error(_: Request, exc: AppError) -> JSONResponse:
     if exc.status_code >= 500:
         logger.error("%s: %s", exc.code, exc.message)
-    response = error_response(exc.status_code, exc.code, exc.message)
+    response = error_response(exc.status_code, exc.code, exc.message, exc.details)
     response.headers.update(exc.headers)
     return response
 

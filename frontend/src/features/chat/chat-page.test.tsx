@@ -231,7 +231,7 @@ describe('ChatPage', () => {
     expect(notifyError).not.toHaveBeenCalled();
   });
 
-  it('shows stream errors on the turn', async () => {
+  it('a failure before the reply undoes the turn and gives the text back', async () => {
     const failure = new ApiError({
       kind: 'server',
       status: 503,
@@ -244,8 +244,29 @@ describe('ChatPage', () => {
 
     await user.type(messageBox(), 'uno{Enter}');
 
-    expect(await screen.findByText('No se pudo completar la respuesta.')).toBeInTheDocument();
+    await waitFor(() => expect(messageBox()).toHaveValue('uno'));
+    expect(screen.queryByRole('article', { name: 'Tú' })).not.toBeInTheDocument();
     expect(notifyError).toHaveBeenCalledWith(failure);
+  });
+
+  it('a failure during the reply stays on the turn', async () => {
+    const failure = new ApiError({
+      kind: 'server',
+      status: null,
+      code: 'MODEL_UNAVAILABLE',
+      message: 'Caído',
+      requestId: 'r1',
+    });
+    vi.mocked(sendMessage).mockImplementationOnce(async (_id, _body, { onToken }) => {
+      onToken('Empie');
+      throw failure;
+    });
+    const { user } = await renderReady();
+
+    await user.type(messageBox(), 'uno{Enter}');
+
+    expect(await screen.findByText('No se pudo completar la respuesta.')).toBeInTheDocument();
+    expect(messageBox()).toHaveValue('');
   });
 
   it('starts a new conversation', async () => {
@@ -617,5 +638,136 @@ describe('ChatPage attachments', () => {
     await user.click(await screen.findByRole('button', { name: 'Notas de un CTF' }));
 
     expect(await screen.findByText(/imágenes recientes de esta conversación/)).toBeInTheDocument();
+  });
+});
+
+describe('ChatPage rate limits', () => {
+  const CLOUD = {
+    ...MODELS.models[0],
+    name: 'groq/openai/gpt-oss-120b',
+    remote: true,
+    provider: 'groq',
+  };
+  const LOCAL = { ...MODELS.models[0], name: 'a:7b', remote: false, provider: 'ollama' };
+
+  function rateLimited(retryAfter: number | null): ApiError {
+    return new ApiError({
+      kind: 'rate_limited',
+      status: 429,
+      code: 'MODEL_RATE_LIMITED',
+      message: 'Límite de groq alcanzado.',
+      requestId: 'r1',
+      provider: 'groq',
+      retryAfter,
+    });
+  }
+
+  async function onCloudModel(defaultModel: string | null = 'a:7b') {
+    vi.mocked(listModels).mockResolvedValue({
+      models: [LOCAL, CLOUD],
+      default_model: defaultModel,
+    });
+    const ready = await renderReady();
+    await ready.user.selectOptions(ready.select, CLOUD.name);
+    return ready;
+  }
+
+  it('says who hit the limit and when, keeps the text and does not toast', async () => {
+    vi.mocked(sendMessage).mockRejectedValueOnce(rateLimited(12));
+    const { user, select } = await onCloudModel();
+
+    await user.type(messageBox(), 'resume esto{Enter}');
+
+    const notice = await screen.findByRole('status');
+    expect(notice).toHaveTextContent('Límite de groq alcanzado. Disponible en 12 s.');
+    expect(messageBox()).toHaveValue('resume esto');
+    expect(screen.queryByRole('article', { name: 'Tú' })).not.toBeInTheDocument();
+    expect(notifyError).not.toHaveBeenCalled();
+    expect(select).toHaveValue(CLOUD.name); // the model never changes on its own
+  });
+
+  it('without a retry time it just asks to wait', async () => {
+    vi.mocked(sendMessage).mockRejectedValueOnce(rateLimited(null));
+    const { user } = await onCloudModel();
+
+    await user.type(messageBox(), 'hola{Enter}');
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Espera un poco.');
+  });
+
+  it('the button answers with the local default model, same text and same files', async () => {
+    const file = {
+      id: 'f'.repeat(32),
+      filename: 'scan.nmap',
+      kind: 'text' as const,
+      mime: 'text/plain',
+      size_bytes: 10,
+      truncated: false,
+      sent: false,
+      created_at: OLD.created_at,
+    };
+    vi.mocked(uploadAttachment).mockResolvedValue(file);
+    vi.mocked(listAttachments).mockResolvedValue({ attachments: [file] }); // pending again
+    vi.mocked(sendMessage)
+      .mockRejectedValueOnce(rateLimited(30))
+      .mockResolvedValueOnce({ model: 'a:7b', content: 'ok' });
+    const { user, select } = await onCloudModel();
+    await user.upload(
+      screen.getByTestId('file-input'),
+      new File(['22/tcp open'], 'scan.nmap', { type: 'text/plain' }),
+    );
+    await screen.findByRole('button', { name: 'Quitar scan.nmap' });
+    await user.type(messageBox(), 'analiza{Enter}');
+
+    await user.click(await screen.findByRole('button', { name: 'Responder ahora con a:7b' }));
+
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(2));
+    const [, body] = vi.mocked(sendMessage).mock.calls[1];
+    expect(body).toEqual({ content: 'analiza', model: 'a:7b', attachment_ids: [file.id] });
+    expect(select).toHaveValue('a:7b');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(messageBox()).toHaveValue('');
+  });
+
+  it.each([
+    ['there is no DEFAULT_MODEL', null],
+    ['the default model is remote too', CLOUD.name],
+  ])('no button when %s', async (_case, defaultModel) => {
+    vi.mocked(sendMessage).mockRejectedValueOnce(rateLimited(5));
+    const { user } = await onCloudModel(defaultModel);
+
+    await user.type(messageBox(), 'hola{Enter}');
+
+    await screen.findByRole('status');
+    expect(screen.queryByRole('button', { name: /Responder ahora/ })).not.toBeInTheDocument();
+  });
+
+  it('a local provider (LM Studio) shows no cloud warnings', async () => {
+    const lmstudio = {
+      ...MODELS.models[0],
+      name: 'lmstudio/qwen3.6-35b-a3b',
+      remote: false,
+      provider: 'lmstudio',
+    };
+    vi.mocked(listModels).mockResolvedValue({ models: [lmstudio], default_model: null });
+    vi.mocked(uploadAttachment).mockResolvedValue({
+      id: 'e'.repeat(32),
+      filename: 'a.txt',
+      kind: 'text',
+      mime: 'text/plain',
+      size_bytes: 1,
+      truncated: false,
+      sent: false,
+      created_at: OLD.created_at,
+    });
+    const { user } = await renderReady();
+
+    await user.upload(
+      screen.getByTestId('file-input'),
+      new File(['x'], 'a.txt', { type: 'text/plain' }),
+    );
+
+    await screen.findByRole('button', { name: 'Quitar a.txt' });
+    expect(screen.queryByText(/saldrá de tu red/)).not.toBeInTheDocument();
   });
 });
