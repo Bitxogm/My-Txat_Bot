@@ -5,7 +5,7 @@ import aiosqlite
 from app.adapters.sqlite.conversations import SqliteConversationRepository
 from app.adapters.sqlite.database import MIGRATIONS, connect, migrate
 from app.adapters.sqlite.personalities import SqlitePersonalityRepository
-from app.domain.builtin_personalities import BUILTIN_PERSONALITIES, MENTOR_CTF
+from app.domain.builtin_personalities import BUILTIN_PERSONALITIES, GENERAL
 from app.domain.personality import DEFAULT_PERSONALITY_ID, GenerationParams, PersonalityFields
 
 
@@ -51,8 +51,9 @@ async def test_builtins_first_then_copies(personality_repo: SqlitePersonalityRep
 
     listed = [p.id for p in await personality_repo.list_all()]
 
-    assert listed[:8] == list(BUILTIN_PERSONALITIES)
-    assert listed[8] == mine.id
+    assert listed[: len(BUILTIN_PERSONALITIES)] == list(BUILTIN_PERSONALITIES)
+    assert listed[0] == DEFAULT_PERSONALITY_ID  # General first
+    assert listed[len(BUILTIN_PERSONALITIES)] == mine.id
     assert not mine.builtin
 
 
@@ -61,8 +62,23 @@ async def test_repository_refuses_to_touch_builtins(
 ) -> None:
     assert await personality_repo.update(DEFAULT_PERSONALITY_ID, fields()) is None
     assert await personality_repo.delete(DEFAULT_PERSONALITY_ID) is False
-    mentor = await personality_repo.get(DEFAULT_PERSONALITY_ID)
-    assert mentor is not None and mentor.fields == MENTOR_CTF
+    general = await personality_repo.get(DEFAULT_PERSONALITY_ID)
+    assert general is not None and general.fields == GENERAL
+
+
+async def test_general_is_seeded_once_and_read_only(
+    personality_repo: SqlitePersonalityRepository,
+) -> None:
+    await personality_repo.seed_builtins(BUILTIN_PERSONALITIES)  # a second startup
+    await personality_repo.seed_builtins(BUILTIN_PERSONALITIES)
+
+    generals = [p for p in await personality_repo.list_all() if p.fields.name == "General"]
+
+    assert [(p.id, p.builtin) for p in generals] == [("builtin-general", True)]
+    assert generals[0].fields.icon == "message-circle"
+    assert generals[0].fields.system_prompt == (
+        "Responde de forma directa y clara a cualquier consulta, técnica o no."
+    )
 
 
 async def test_deleting_a_personality_keeps_the_conversation_snapshot(
