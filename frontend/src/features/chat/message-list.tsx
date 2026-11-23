@@ -3,6 +3,7 @@ import { ErrorBoundary } from '@/components/error-boundary';
 import { attachmentContentUrl } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { AttachmentChip } from './attachment-chip';
+import { PendingReply } from './pending-reply';
 import type { UiMessage } from './use-chat';
 
 const STATUS_NOTE: Partial<Record<UiMessage['status'], string>> = {
@@ -33,11 +34,14 @@ export function MessageList({
   messages,
   loading = false,
   conversationId = null,
+  localModel = false,
 }: {
   messages: UiMessage[];
   loading?: boolean;
   /** Needed to show image thumbnails. */
   conversationId?: string | null;
+  /** The reply comes from a local model, which may have to load before the first token. */
+  localModel?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -125,9 +129,7 @@ export function MessageList({
                     )}
                   >
                     {!message.content ? (
-                      <span className="text-muted-foreground animate-pulse" aria-label="Generando">
-                        …
-                      </span>
+                      <PendingReply localModel={localModel} />
                     ) : message.role === 'assistant' ? (
                       // Model output is rendered as Markdown; user text stays literal.
                       // If the renderer throws (pathological nesting, chunk failed to load), this

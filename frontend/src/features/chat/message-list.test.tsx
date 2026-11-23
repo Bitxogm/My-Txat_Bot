@@ -1,6 +1,7 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { MessageList } from './message-list';
+import { MODEL_LOADING_DELAY_MS, MODEL_LOADING_NOTE } from './pending-reply';
 import type { UiMessage } from './use-chat';
 
 let nextId = 0;
@@ -59,5 +60,54 @@ describe('MessageList', () => {
 
     expect(screen.getByText('Hola')).toBeInTheDocument();
     expect(screen.queryByText(/no devolvió/)).not.toBeInTheDocument();
+  });
+
+  describe('before the first token', () => {
+    it('says a local model is loading when the first token takes over 3 s', () => {
+      vi.useFakeTimers();
+      try {
+        render(<MessageList messages={[assistant('', 'streaming')]} localModel />);
+        expect(screen.getByLabelText('Generando')).toBeInTheDocument();
+        expect(screen.queryByText(MODEL_LOADING_NOTE)).not.toBeInTheDocument();
+
+        act(() => vi.advanceTimersByTime(MODEL_LOADING_DELAY_MS));
+
+        expect(screen.getByRole('status')).toHaveTextContent(MODEL_LOADING_NOTE);
+        expect(screen.queryByLabelText('Generando')).not.toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('keeps only the typing indicator for a remote model', () => {
+      vi.useFakeTimers();
+      try {
+        render(<MessageList messages={[assistant('', 'streaming')]} />);
+
+        act(() => vi.advanceTimersByTime(MODEL_LOADING_DELAY_MS * 2));
+
+        expect(screen.getByLabelText('Generando')).toBeInTheDocument();
+        expect(screen.queryByText(MODEL_LOADING_NOTE)).not.toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('drops the note once the first token arrives', () => {
+      vi.useFakeTimers();
+      try {
+        const { rerender } = render(
+          <MessageList messages={[assistant('', 'streaming')]} localModel />,
+        );
+        act(() => vi.advanceTimersByTime(MODEL_LOADING_DELAY_MS));
+        const reply: UiMessage = { ...assistant('', 'streaming'), content: 'Hola' };
+
+        rerender(<MessageList messages={[reply]} localModel />);
+
+        expect(screen.queryByText(MODEL_LOADING_NOTE)).not.toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });

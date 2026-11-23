@@ -30,7 +30,10 @@ def build_llm_provider(
         settings.ollama_timeout_seconds, settings.ollama_chat_read_timeout_seconds
     )
     ollama = OllamaProvider(
-        ollama_client, chat_timeout, think=settings.ollama_think if think is None else think
+        ollama_client,
+        chat_timeout,
+        think=settings.ollama_think if think is None else think,
+        keep_alive=settings.ollama_keep_alive,
     )
     for warning in settings.config_warnings:
         logger.warning("%s", warning)

@@ -3,7 +3,9 @@ import json
 import httpx
 import pytest
 
+from app.adapters import llm_factory
 from app.adapters.ollama.provider import OllamaProvider
+from app.core.config import Settings
 from app.core.errors import EmptyReplyError, ModelNotFoundError, ModelUnavailableError
 from app.domain.chat import ChatMessage, ModelInfo
 
@@ -173,3 +175,45 @@ async def test_truncated_reply_with_text_is_kept() -> None:
     provider = provider_with(httpx.MockTransport(lambda _: httpx.Response(200, content=body)))
 
     assert await collect(provider) == ["parcial"]
+
+
+async def test_keep_alive_is_sent_with_every_chat_request() -> None:
+    seen: list[dict[str, object]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content))
+        return httpx.Response(200, content=ndjson({"message": {"content": "a"}, "done": True}))
+
+    provider = OllamaProvider(
+        httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://o.test"),
+        keep_alive="30m",
+    )
+    await collect(provider)
+    await collect(provider)
+
+    assert [request["keep_alive"] for request in seen] == ["30m", "30m"]
+
+
+async def test_factory_passes_the_configured_keep_alive(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[dict[str, object]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content))
+        return httpx.Response(200, content=ndjson({"message": {"content": "a"}, "done": True}))
+
+    monkeypatch.setattr(
+        llm_factory,
+        "build_ollama_client",
+        lambda base_url, _timeout: httpx.AsyncClient(
+            transport=httpx.MockTransport(handler), base_url=base_url
+        ),
+    )
+    settings = Settings(ollama_keep_alive="1h", _env_file=None)  # type: ignore[call-arg]
+    provider, clients = llm_factory.build_llm_provider(settings)
+    try:
+        [_ async for _ in provider.stream_chat("m", [ChatMessage(role="user", content="x")])]
+    finally:
+        for client in clients:
+            await client.aclose()
+
+    assert seen[0]["keep_alive"] == "1h"
