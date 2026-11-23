@@ -4,7 +4,7 @@ import httpx
 import pytest
 
 from app.domain.builtin_personalities import BUILTIN_PERSONALITIES
-from app.domain.personality import DEFAULT_PERSONALITY_ID
+from app.domain.personality import DEFAULT_PERSONALITY_ID, MENTOR_CTF_ID
 from app.domain.prompts import BASE_PROMPT, PERSONALITY_HEADER
 from tests.conftest import FakeLLMProvider
 
@@ -105,14 +105,14 @@ async def test_patch_cannot_flag_a_copy_as_builtin(client: httpx.AsyncClient) ->
 
 
 async def test_duplicate_a_builtin_gives_an_editable_copy(client: httpx.AsyncClient) -> None:
-    response = await client.post(f"/api/personalities/{DEFAULT_PERSONALITY_ID}/duplicate")
+    response = await client.post(f"/api/personalities/{MENTOR_CTF_ID}/duplicate")
 
     assert response.status_code == 201
     copy = response.json()
     assert copy["name"] == "Mentor CTF (copia)"
     assert copy["builtin"] is False
-    assert copy["id"] != DEFAULT_PERSONALITY_ID
-    assert copy["system_prompt"] == BUILTIN_PERSONALITIES[DEFAULT_PERSONALITY_ID].system_prompt
+    assert copy["id"] != MENTOR_CTF_ID
+    assert copy["system_prompt"] == BUILTIN_PERSONALITIES[MENTOR_CTF_ID].system_prompt
     edited = await client.patch(f"/api/personalities/{copy['id']}", json={"temperature": 1.2})
     assert edited.status_code == 200
 
@@ -176,22 +176,23 @@ async def send(client: httpx.AsyncClient, conversation_id: object) -> None:
     assert response.status_code == 200
 
 
-async def test_new_conversation_defaults_to_mentor_ctf(
+async def test_new_conversation_defaults_to_general(
     client: httpx.AsyncClient, fake_llm: FakeLLMProvider
 ) -> None:
     conversation = await new_conversation(client)
 
     assert conversation["personality"] == {
-        "id": DEFAULT_PERSONALITY_ID,
-        "name": "Mentor CTF",
-        "icon": "flag",
+        "id": "builtin-general",
+        "name": "General",
+        "icon": "message-circle",
     }
     await send(client, conversation["id"])
     system = fake_llm.calls[-1][1][0]
     assert system.role == "system"
     assert system.content.startswith(BASE_PROMPT + PERSONALITY_HEADER)
-    assert "mentor de CTF" in system.content
-    assert fake_llm.params[-1] is not None and fake_llm.params[-1].temperature == 0.5
+    assert "Responde de forma directa y clara a cualquier consulta" in system.content
+    assert "mentor de CTF" not in system.content
+    assert fake_llm.params[-1] is not None and fake_llm.params[-1].temperature is None
 
 
 async def test_unknown_personality_is_404(client: httpx.AsyncClient) -> None:
@@ -306,3 +307,27 @@ async def test_new_conversation_rejects_snapshot_fields(client: httpx.AsyncClien
     )
 
     assert response.status_code == 422
+
+
+async def test_new_conversation_keeps_the_chosen_personality(client: httpx.AsyncClient) -> None:
+    response = await client.post(
+        "/api/conversations", json={"model": "m", "personality_id": "builtin-pentester"}
+    )
+
+    assert response.status_code == 201
+    assert response.json()["personality"]["name"] == "Pentester"
+
+
+async def test_the_personality_cannot_be_changed_afterwards(
+    client: httpx.AsyncClient, fake_llm: FakeLLMProvider
+) -> None:
+    conversation = await new_conversation(client)
+    await send(client, conversation["id"])
+
+    response = await client.patch(
+        f"/api/conversations/{conversation['id']}", json={"personality_id": "builtin-pentester"}
+    )
+
+    assert response.status_code == 422
+    detail = (await client.get(f"/api/conversations/{conversation['id']}")).json()
+    assert detail["personality"]["id"] == DEFAULT_PERSONALITY_ID
