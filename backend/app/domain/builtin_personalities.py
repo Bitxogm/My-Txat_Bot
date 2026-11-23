@@ -5,7 +5,21 @@ customise one, duplicate it. Only the personality layer lives here: scope and et
 are in the base layer (domain/prompts.py), which is always prepended.
 """
 
-from app.domain.personality import DEFAULT_PERSONALITY_ID, GenerationParams, PersonalityFields
+from app.domain.personality import (
+    DEFAULT_PERSONALITY_ID,
+    MENTOR_CTF_ID,
+    GenerationParams,
+    PersonalityFields,
+)
+
+GENERAL = PersonalityFields(
+    name="General",
+    icon="message-circle",
+    description="Responde de forma directa a cualquier consulta, técnica o no.",
+    # Minimal on purpose: the base layer already sets rigor, scope and style.
+    system_prompt="Responde de forma directa y clara a cualquier consulta, técnica o no.",
+    params=GenerationParams(),
+)
 
 MENTOR_CTF = PersonalityFields(
     name="Mentor CTF",
@@ -148,8 +162,10 @@ Límites:
 )
 
 # Order = display order. The first one is the default for new conversations.
+# Order is the order shown in the app; the default goes first.
 BUILTIN_PERSONALITIES: dict[str, PersonalityFields] = {
-    DEFAULT_PERSONALITY_ID: MENTOR_CTF,
+    DEFAULT_PERSONALITY_ID: GENERAL,
+    MENTOR_CTF_ID: MENTOR_CTF,
     "builtin-pentester": PENTESTER,
     "builtin-blue-team": BLUE_TEAM,
     "builtin-appsec": APPSEC,

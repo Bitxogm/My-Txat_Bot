@@ -13,6 +13,7 @@ import {
   listModels,
   listPersonalities,
   sendMessage,
+  setConversationPersonality,
   uploadAttachment,
   type Attachment,
   type Conversation,
@@ -33,6 +34,7 @@ vi.mock('@/lib/api', async (importOriginal) => ({
   getConversation: vi.fn(),
   deleteConversation: vi.fn(),
   sendMessage: vi.fn(),
+  setConversationPersonality: vi.fn(),
   listAttachments: vi.fn(),
   uploadAttachment: vi.fn(),
   deleteAttachment: vi.fn(),
@@ -91,6 +93,27 @@ async function renderReady() {
   return { user, select };
 }
 
+function personalityTrigger() {
+  return screen.findByRole('combobox', { name: 'Personalidad' });
+}
+
+/** Through the keyboard, like a screen-reader user (Radix Select opens with Enter). */
+async function choosePersonality(user: ReturnType<typeof userEvent.setup>, name: string) {
+  // The composer takes the focus once the models are loaded; wait for it before moving on.
+  await waitFor(() => expect(messageBox()).toHaveFocus());
+  const trigger = await personalityTrigger();
+  trigger.focus();
+  await user.keyboard('{Enter}');
+  expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  // Typeahead to the option and Enter, all by keyboard.
+  await user.keyboard(name);
+  await user.keyboard('{Enter}');
+}
+
+function lockedPersonality() {
+  return screen.getByLabelText(/^Personalidad: /);
+}
+
 function messageBox() {
   return screen.getByRole('textbox', { name: 'Mensaje' });
 }
@@ -114,6 +137,7 @@ function personality(id: string, name: string, extra: Partial<Personality> = {})
 }
 
 const PERSONALITIES = [
+  personality('builtin-general', 'General'),
   personality('builtin-mentor-ctf', 'Mentor CTF'),
   personality('builtin-pentester', 'Pentester', { default_model: 'a:7b' }),
 ];
@@ -153,7 +177,7 @@ describe('ChatPage', () => {
     expect(await screen.findByText('Hola')).toBeInTheDocument();
     expect(createConversation).toHaveBeenCalledWith({
       model: 'b:8b',
-      personality_id: 'builtin-mentor-ctf',
+      personality_id: 'builtin-general',
     });
     expect(sendMessage).toHaveBeenCalledWith(
       'n'.repeat(32),
@@ -277,7 +301,9 @@ describe('ChatPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Nueva conversación' }));
 
-    expect(await screen.findByRole('radio', { name: /Mentor CTF/ })).toBeChecked();
+    expect(await personalityTrigger()).toHaveTextContent('General');
+    expect(messageBox()).toHaveFocus();
+    expect(screen.queryByText('hola')).not.toBeInTheDocument();
   });
 
   it('deletes a conversation after confirming', async () => {
@@ -336,19 +362,22 @@ describe('ChatPage', () => {
 });
 
 describe('ChatPage personalities', () => {
-  it('starts a new chat with Mentor CTF selected', async () => {
+  it('opens straight into the chat: no cards, General selected, composer focused', async () => {
     await renderReady();
 
-    expect(await screen.findByRole('radio', { name: /Mentor CTF/ })).toBeChecked();
-    expect(screen.getByRole('radio', { name: /Pentester/ })).not.toBeChecked();
+    expect(await personalityTrigger()).toHaveTextContent('General');
+    expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
+    expect(screen.queryByText('Elige una personalidad')).not.toBeInTheDocument();
+    await waitFor(() => expect(messageBox()).toHaveFocus());
   });
 
-  it('creates the conversation with the chosen personality and its default model', async () => {
+  it('changes the personality before the first message and then locks it', async () => {
     vi.mocked(sendMessage).mockResolvedValue({ model: 'a:7b', content: '' });
     const { user, select } = await renderReady();
 
-    await user.click(await screen.findByRole('radio', { name: /Pentester/ }));
-    expect(select).toHaveValue('a:7b');
+    await choosePersonality(user, 'Pentester');
+    expect(await personalityTrigger()).toHaveTextContent('Pentester');
+    expect(select).toHaveValue('a:7b'); // the personality's preferred model
     await user.type(messageBox(), 'hola{Enter}');
 
     await waitFor(() =>
@@ -357,18 +386,60 @@ describe('ChatPage personalities', () => {
         personality_id: 'builtin-pentester',
       }),
     );
-    expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Personalidad' })).not.toBeInTheDocument();
+    expect(lockedPersonality()).toHaveAccessibleName(
+      'Personalidad: Pentester. La personalidad se fija al empezar la conversación',
+    );
   });
 
-  it('shows the personality of an opened conversation, read-only', async () => {
-    vi.mocked(getConversation).mockResolvedValue({ ...OLD, messages: [] });
+  it('an opened conversation shows its personality locked', async () => {
+    vi.mocked(getConversation).mockResolvedValue({
+      ...OLD,
+      messages: [
+        {
+          id: 1,
+          role: 'user',
+          content: 'hola',
+          status: 'done',
+          created_at: OLD.created_at,
+          attachments: [],
+        },
+      ],
+    });
     const { user } = await renderReady();
 
     await user.click(await screen.findByRole('button', { name: 'Notas de un CTF' }));
 
-    const badge = await screen.findByTitle('Personalidad fijada al crear esta conversación');
-    expect(badge).toHaveTextContent('Pentester');
-    expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
+    await waitFor(() => expect(lockedPersonality()).toHaveTextContent('Pentester'));
+    expect(screen.queryByRole('combobox', { name: 'Personalidad' })).not.toBeInTheDocument();
+  });
+
+  it('a draft (a file attached, nothing sent) can still change its personality', async () => {
+    vi.mocked(uploadAttachment).mockResolvedValue({
+      id: 'f'.repeat(32),
+      filename: 'a.txt',
+      kind: 'text',
+      mime: 'text/plain',
+      size_bytes: 1,
+      truncated: false,
+      sent: false,
+      created_at: OLD.created_at,
+    });
+    vi.mocked(setConversationPersonality).mockResolvedValue({
+      ...conversation('n'.repeat(32), 'Nueva conversación'),
+      personality: { id: 'builtin-pentester', name: 'Pentester', icon: 'crosshair' },
+    });
+    const { user } = await renderReady();
+    await user.upload(
+      screen.getByTestId('file-input'),
+      new File(['x'], 'a.txt', { type: 'text/plain' }),
+    );
+    await screen.findByRole('button', { name: 'Quitar a.txt' });
+
+    await choosePersonality(user, 'Pentester');
+
+    expect(setConversationPersonality).toHaveBeenCalledWith('n'.repeat(32), 'builtin-pentester');
+    expect(await personalityTrigger()).toHaveTextContent('Pentester');
   });
 
   it('opens the personalities page from the sidebar', async () => {
@@ -423,7 +494,7 @@ describe('ChatPage attachments', () => {
     expect(await within(chips).findByText('2 KB')).toBeInTheDocument();
     expect(createConversation).toHaveBeenCalledWith({
       model: 'b:8b',
-      personality_id: 'builtin-mentor-ctf',
+      personality_id: 'builtin-general',
     });
     expect(uploadAttachment).toHaveBeenCalledWith(
       'n'.repeat(32),

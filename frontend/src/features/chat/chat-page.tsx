@@ -10,13 +10,13 @@ import {
 import { useConversations } from '@/features/conversations/use-conversations';
 import { OsintSourcesPage } from '@/features/osint-sources/osint-sources-page';
 import { PersonalitiesPage } from '@/features/personalities/personalities-page';
-import { PersonalityBadge } from '@/features/personalities/personality-badge';
-import { PersonalityPicker } from '@/features/personalities/personality-picker';
+import { PersonalitySelect } from '@/features/personalities/personality-select';
 import {
   DEFAULT_PERSONALITY_ID,
   usePersonalities,
 } from '@/features/personalities/use-personalities';
-import type { Personality } from '@/lib/api';
+import { setConversationPersonality, type Personality } from '@/lib/api';
+import { notifyError } from '@/lib/notify-error';
 import { Composer } from './composer';
 import { RateLimitNotice, type RateLimit } from './rate-limit-notice';
 import { useAttachments } from './use-attachments';
@@ -41,9 +41,23 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [page, setPage] = useState<SettingsPage | null>(null);
   const [personalityId, setPersonalityId] = useState(DEFAULT_PERSONALITY_ID);
+  // Bumped by "Nueva conversación" so the composer takes the focus again.
+  const [newChats, setNewChats] = useState(0);
 
-  function choosePersonality(personality: Personality) {
+  async function choosePersonality(personality: Personality) {
+    const previous = personalityId;
     setPersonalityId(personality.id);
+    // A draft already exists (a file was attached): change it on the server too (ADR-022).
+    if (chat.conversationId) {
+      try {
+        const updated = await setConversationPersonality(chat.conversationId, personality.id);
+        chat.setPersonality(updated.personality);
+      } catch (error) {
+        notifyError(error);
+        setPersonalityId(previous);
+        return;
+      }
+    }
     // The personality's preferred model, if it's available here.
     if (personality.default_model && models.some((m) => m.name === personality.default_model)) {
       select(personality.default_model);
@@ -70,6 +84,7 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
     setPage(null);
     setRateLimit(null);
     setPersonalityId(DEFAULT_PERSONALITY_ID);
+    setNewChats((n) => n + 1);
     attachments.clear();
     chat.startNew();
   }
@@ -136,9 +151,11 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
       ? 'Modelo en la nube: las imágenes recientes de esta conversación también saldrán de tu red.'
       : null;
 
-  // A brand-new chat (nothing sent yet) shows the personality picker instead of messages.
-  const isNewChat =
-    !chat.conversationId && chat.messages.length === 0 && personalities.personalities.length > 0;
+  // The personality is fixed by the first message (ADR-013, ADR-022): an opened conversation is
+  // locked, a new chat or a draft (files attached, nothing sent) is not.
+  const personalityLocked =
+    chat.messages.some((m) => m.role === 'user') ||
+    (chat.isLoading && chat.conversationId !== null);
 
   const sidebar = (
     <ConversationSidebar
@@ -181,13 +198,18 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
               <MenuIcon />
             </Button>
             <span className="font-heading text-base font-semibold md:hidden">Txat_bot</span>
-            {page === null && chat.conversationId && (
-              <span className="hidden sm:flex">
-                <PersonalityBadge personality={chat.personality} />
-              </span>
-            )}
           </div>
           <div className="flex items-center gap-1">
+            {page === null && (
+              <PersonalitySelect
+                personalities={personalities.personalities}
+                value={personalityId}
+                onChange={(p) => void choosePersonality(p)}
+                locked={personalityLocked}
+                fixed={chat.personality}
+                disabled={chat.isStreaming}
+              />
+            )}
             <ModelSelect
               models={models}
               value={selected}
@@ -218,25 +240,13 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
           <OsintSourcesPage />
         ) : (
           <>
-            {isNewChat ? (
-              <div className="flex-1 overflow-y-auto">
-                <div className="mx-auto w-full max-w-3xl px-4 py-6">
-                  <PersonalityPicker
-                    personalities={personalities.personalities}
-                    value={personalityId}
-                    onChange={choosePersonality}
-                    models={models}
-                  />
-                </div>
-              </div>
-            ) : (
-              <MessageList
-                messages={chat.messages}
-                loading={chat.isLoading}
-                conversationId={chat.conversationId}
-              />
-            )}
+            <MessageList
+              messages={chat.messages}
+              loading={chat.isLoading}
+              conversationId={chat.conversationId}
+            />
             <Composer
+              focusKey={`${chat.conversationId ?? 'new'}:${newChats}:${page ?? 'chat'}`}
               onSend={(content) => void sendWithFiles(content)}
               draft={draft}
               onDraftChange={setDraft}

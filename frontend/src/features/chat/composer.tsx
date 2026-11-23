@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useRef,
   useState,
   type ChangeEvent,
@@ -33,6 +34,8 @@ interface ComposerProps {
   onDraftChange?: (text: string) => void;
   /** Rendered right above the input (e.g. the rate-limit notice). */
   banner?: ReactNode;
+  /** The input takes the focus on mount and every time this value changes (new chat, open). */
+  focusKey?: string;
 }
 
 export function Composer({
@@ -50,7 +53,13 @@ export function Composer({
   draft: controlledDraft,
   onDraftChange,
   banner = null,
+  focusKey,
 }: ComposerProps) {
+  const input = useRef<HTMLTextAreaElement>(null);
+  // Also when it becomes enabled: at first it waits for the model list.
+  useEffect(() => {
+    if (!disabled) input.current?.focus();
+  }, [focusKey, disabled]);
   const [ownDraft, setOwnDraft] = useState('');
   const draft = controlledDraft ?? ownDraft;
   const setDraft = onDraftChange ?? setOwnDraft;
@@ -140,6 +149,7 @@ export function Composer({
             Mensaje
           </label>
           <Textarea
+            ref={input}
             id="composer"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}

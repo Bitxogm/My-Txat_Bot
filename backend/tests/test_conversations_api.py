@@ -34,13 +34,16 @@ async def test_requires_a_session(anon_client: httpx.AsyncClient) -> None:
     assert (await anon_client.get("/api/conversations")).status_code == 401
 
 
-async def test_create_and_list(client: httpx.AsyncClient) -> None:
+async def test_create_and_list(client: httpx.AsyncClient, fake_llm: FakeLLMProvider) -> None:
     conversation_id = await create(client)
+    # A draft (no message yet, ADR-022) is not listed.
+    assert (await client.get("/api/conversations")).json()["conversations"] == []
+
+    await send(client, conversation_id, "hola")
 
     body = (await client.get("/api/conversations")).json()
-
     assert [c["id"] for c in body["conversations"]] == [conversation_id]
-    assert body["conversations"][0]["title"] == "Nueva conversación"
+    assert body["conversations"][0]["title"] == "hola"
     assert body["conversations"][0]["model"] == "m"
 
 

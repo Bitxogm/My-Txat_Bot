@@ -57,7 +57,7 @@ backend/app/
 
 Requieren sesión. `system prompt = capa base (domain/prompts.py) + personalidad`.
 
-- `GET /api/personalities` → `{ personalities: [...] }`: las 8 incorporadas (`builtin: true`, ids `builtin-*`) primero, luego las copias.
+- `GET /api/personalities` → `{ personalities: [...] }`: las 9 incorporadas (`builtin: true`, ids `builtin-*`) primero, luego las copias.
 - `GET/PATCH/DELETE /api/personalities/{id}`: editar o borrar una incorporada → 403 `PERSONALITY_BUILTIN`. `PATCH` es parcial; enviar `null` limpia un parámetro.
 - `POST /api/personalities` y `POST /api/personalities/{id}/duplicate` → 201 (siempre `builtin: false`).
 - Campos: `name` (1-60), `icon` (nombre de icono lucide), `description` (≤200), `system_prompt` (1-8000), `temperature` (0-2), `top_p` (0-1], `num_ctx` (512-16384: más contexto desborda la GPU de 12 GB con un 14B), `default_model`; los parámetros son opcionales (null = valor del modelo).
@@ -79,9 +79,10 @@ Requiere sesión.
 Requieren sesión. Persisten en SQLite (`data/txatbot.db`) vía `ConversationRepository` (`adapters/sqlite`, aiosqlite). Esquema versionado con `PRAGMA user_version` en `adapters/sqlite/database.py`: las migraciones solo se añaden al final de `MIGRATIONS`.
 
 - `GET /api/conversations` → `{ conversations: [{ id, title, model, created_at, updated_at }] }`, por actividad reciente.
-- `POST /api/conversations` `{ model?, personality_id? }` → 201 con la conversación (título provisional "Nueva conversación"). Sin `personality_id`, Mentor CTF. Modelo: el enviado, si no el `default_model` de la personalidad, si no `DEFAULT_MODEL`. Las conversaciones devuelven `personality: { id, name, icon } | null` (snapshot, solo lectura).
+- `POST /api/conversations` `{ model?, personality_id? }` → 201 con la conversación (título provisional "Nueva conversación"). Sin `personality_id`, General (ADR-021). Modelo: el enviado, si no el `default_model` de la personalidad, si no `DEFAULT_MODEL`. Las conversaciones devuelven `personality: { id, name, icon } | null` (snapshot, solo lectura).
 - `GET /api/conversations/{id}` → conversación + `messages: [{ id, role, content, status, created_at }]`.
-- `PATCH /api/conversations/{id}` `{ title }` · `DELETE /api/conversations/{id}` → 204.
+- `PATCH /api/conversations/{id}` `{ title?, personality_id? }`: `personality_id` solo mientras sea borrador (sin mensajes del usuario); después, 409 `PERSONALITY_LOCKED` (ADR-022) · `DELETE /api/conversations/{id}` → 204.
+- Borradores (ADR-022): las conversaciones sin mensajes del usuario no salen en `GET /api/conversations`; las que no tienen ningún mensaje y pasan de 24 h se borran al arrancar, con sus ficheros.
 - `POST /api/conversations/{id}/messages` `{ content, model?, attachment_ids? }` → mismo SSE que `/api/chat`. El servidor guarda el mensaje del usuario, antepone el system prompt compuesto (base + snapshot de la personalidad), construye el historial desde la base de datos y guarda la respuesta como `done`, `stopped` (el cliente cortó) o `error` (con el texto parcial). El primer mensaje da el título.
 - Los turnos con error y las respuestas vacías no se reenvían al modelo.
 - Si el modelo falla **antes del primer token** (límite 429, servidor caído, modelo inexistente, respuesta vacía), el turno se deshace: se borra el mensaje del usuario, sus adjuntos vuelven a pendientes y la conversación no cambia de modelo ni de título. El cliente devuelve el texto al compositor. Un fallo a mitad de respuesta sí se guarda (`error`, con el texto parcial).
@@ -132,6 +133,8 @@ frontend/src/
   features/         auth, chat (mensajes, Markdown, adjuntos), conversations,
                     personalities, osint-sources
 ```
+
+Entrada al chat: abrir Txat o pulsar "Nueva conversación" lleva directo al chat con el compositor enfocado. En la cabecera, junto al selector de modelo, un desplegable de personalidad (General por defecto) que muestra icono y nombre, y la descripción en el menú. Se puede cambiar hasta el primer mensaje (si ya hay borrador, con `PATCH /api/conversations/{id}` `{ personality_id }`); después queda fijo, con candado y el aviso "La personalidad se fija al empezar la conversación". Las tarjetas de personalidad se usan en la página de gestión, con sus acciones (ver/editar, duplicar, borrar).
 
 ## Manejo de errores
 
