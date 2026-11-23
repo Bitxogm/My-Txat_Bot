@@ -1,4 +1,4 @@
-from app.domain.builtin_personalities import BUILTIN_PERSONALITIES
+from app.domain.builtin_personalities import BUILTIN_PERSONALITIES, MENTOR_CTF
 from app.domain.prompts import (
     BASE_PROMPT,
     PERSONALITY_FOOTER,
@@ -98,3 +98,13 @@ def test_mentor_answers_knowledge_questions_directly() -> None:
     assert "No pidas antes qué ha probado" in mentor
     assert "Método para retos" in mentor
     assert mentor.index("Pregunta de conocimiento") < mentor.index("Método para retos")
+
+
+def test_mentor_gives_the_first_hint_instead_of_only_questions() -> None:
+    prompt = MENTOR_CTF.system_prompt
+
+    assert "da siempre la pista 1" in prompt
+    assert "Nunca respondas solo con preguntas" in prompt
+    assert "como mucho UNA pregunta" in prompt
+    assert "Si el usuario ya dice qué ha probado" in prompt
+    assert "Antes de dar una pista, pregunta" not in prompt
