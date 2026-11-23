@@ -79,7 +79,7 @@ Requiere sesión.
 Requieren sesión. Persisten en SQLite (`data/txatbot.db`) vía `ConversationRepository` (`adapters/sqlite`, aiosqlite). Esquema versionado con `PRAGMA user_version` en `adapters/sqlite/database.py`: las migraciones solo se añaden al final de `MIGRATIONS`.
 
 - `GET /api/conversations` → `{ conversations: [{ id, title, model, created_at, updated_at }] }`, por actividad reciente.
-- `POST /api/conversations` `{ model?, personality_id? }` → 201 con la conversación (título provisional "Nueva conversación"). Sin `personality_id`, Mentor CTF. Modelo: el enviado, si no el `default_model` de la personalidad, si no `DEFAULT_MODEL`. Las conversaciones devuelven `personality: { id, name, icon } | null` (snapshot, solo lectura).
+- `POST /api/conversations` `{ model?, personality_id? }` → 201 con la conversación (título provisional "Nueva conversación"). Sin `personality_id`, General (ADR-021). Modelo: el enviado, si no el `default_model` de la personalidad, si no `DEFAULT_MODEL`. Las conversaciones devuelven `personality: { id, name, icon } | null` (snapshot, solo lectura).
 - `GET /api/conversations/{id}` → conversación + `messages: [{ id, role, content, status, created_at }]`.
 - `PATCH /api/conversations/{id}` `{ title }` · `DELETE /api/conversations/{id}` → 204.
 - `POST /api/conversations/{id}/messages` `{ content, model?, attachment_ids? }` → mismo SSE que `/api/chat`. El servidor guarda el mensaje del usuario, antepone el system prompt compuesto (base + snapshot de la personalidad), construye el historial desde la base de datos y guarda la respuesta como `done`, `stopped` (el cliente cortó) o `error` (con el texto parcial). El primer mensaje da el título.
