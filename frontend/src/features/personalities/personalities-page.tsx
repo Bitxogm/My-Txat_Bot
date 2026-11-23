@@ -11,11 +11,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { ModelInfo, Personality, PersonalityInput } from '@/lib/api';
+import { PersonalityCards } from './personality-cards';
 import { PersonalityForm } from './personality-form';
-import { PersonalityIcon } from './personality-icon';
 import type { UsePersonalities } from './use-personalities';
 
 type FormState =
@@ -79,71 +78,56 @@ export function PersonalitiesPage({ store, models }: PersonalitiesPageProps) {
         {store.loading ? (
           <p className="text-muted-foreground text-sm">Cargando…</p>
         ) : (
-          <ul className="flex flex-col gap-2" aria-label="Lista de personalidades">
-            {store.personalities.map((p) => (
-              <li
-                key={p.id}
-                aria-label={p.name}
-                className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center"
-              >
-                <div className="flex min-w-0 flex-1 items-start gap-3">
-                  <PersonalityIcon name={p.icon} className="mt-0.5 size-4 shrink-0" />
-                  <div className="flex min-w-0 flex-col gap-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-medium">{p.name}</span>
-                      <Badge variant={p.builtin ? 'secondary' : 'outline'}>
-                        {p.builtin ? 'Incorporada' : 'Propia'}
-                      </Badge>
-                    </div>
-                    <p className="text-muted-foreground text-xs">{p.description}</p>
-                    <p className="text-muted-foreground font-mono text-[11px]">{params(p)}</p>
-                  </div>
-                </div>
-                <div className="flex shrink-0 gap-1 self-end sm:self-center">
-                  {p.builtin ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setForm({ mode: 'view', personality: p })}
-                      aria-label={`Ver «${p.name}»`}
-                    >
-                      <EyeIcon />
-                      Ver
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setForm({ mode: 'edit', personality: p })}
-                      aria-label={`Editar «${p.name}»`}
-                    >
-                      <PencilIcon />
-                      Editar
-                    </Button>
-                  )}
+          <PersonalityCards
+            personalities={store.personalities}
+            details={(p) => (
+              <p className="text-muted-foreground font-mono text-[11px]">{params(p)}</p>
+            )}
+            actions={(p) => (
+              <>
+                {p.builtin ? (
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => void duplicate(p)}
-                    aria-label={`Duplicar «${p.name}»`}
+                    onClick={() => setForm({ mode: 'view', personality: p })}
+                    aria-label={`Ver «${p.name}»`}
                   >
-                    <CopyIcon />
-                    Duplicar
+                    <EyeIcon />
+                    Ver
                   </Button>
-                  {!p.builtin && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setPendingDelete(p)}
-                      aria-label={`Borrar «${p.name}»`}
-                    >
-                      <Trash2Icon />
-                    </Button>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setForm({ mode: 'edit', personality: p })}
+                    aria-label={`Editar «${p.name}»`}
+                  >
+                    <PencilIcon />
+                    Editar
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void duplicate(p)}
+                  aria-label={`Duplicar «${p.name}»`}
+                >
+                  <CopyIcon />
+                  Duplicar
+                </Button>
+                {!p.builtin && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setPendingDelete(p)}
+                    aria-label={`Borrar «${p.name}»`}
+                  >
+                    <Trash2Icon />
+                  </Button>
+                )}
+              </>
+            )}
+          />
         )}
       </div>
 
