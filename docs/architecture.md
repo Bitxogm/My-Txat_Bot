@@ -111,6 +111,7 @@ Requiere sesión (401 sin cookie válida). `/api/chat` es la variante sin estado
   - `event: error` / `data: {code, message, request_id}` si falla con el stream ya empezado.
 - Los fallos antes del primer token (modelo inexistente → 404 `MODEL_NOT_FOUND`, Ollama caído → 503 `MODEL_UNAVAILABLE`, respuesta sin texto → 502 `EMPTY_REPLY`) devuelven el JSON de error normal.
 - Razonamiento de los modelos que lo tienen (qwen3.5, deepseek-r1…) desactivado por defecto (`OLLAMA_THINK=false`): con él, Ollama manda el razonamiento aparte, el backend lo ignora y la primera palabra puede tardar minutos o no llegar si se agota el límite de longitud.
+- Cada petición de chat a Ollama lleva `keep_alive` (`OLLAMA_KEEP_ALIVE`, 30 min por defecto): con el de Ollama (5 min) el modelo se descargaba entre preguntas y volver a cargarlo tardaba más de un minuto en la GTX 1070. En el chat, si el primer token de un modelo local tarda más de 3 s, en lugar del indicador de escritura se ve "Cargando el modelo en memoria…".
 - Si el cliente corta la conexión, el backend cierra la petición a Ollama.
 
 ## Evaluación de respuestas
