@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from app.api.dependencies import (
     get_app_settings,
@@ -25,6 +25,7 @@ from app.core.errors import (
     BadRequestError,
     ConversationNotFoundError,
     ModelWithoutVisionError,
+    PersonalityLockedError,
     PersonalityNotFoundError,
 )
 from app.domain.attachment import (
@@ -43,7 +44,7 @@ from app.domain.conversation import (
     title_from_message,
 )
 from app.domain.osint import format_osint_catalog, needs_osint_catalog
-from app.domain.personality import DEFAULT_PERSONALITY_ID
+from app.domain.personality import DEFAULT_PERSONALITY_ID, Personality
 from app.domain.prompts import compose_system_prompt
 from app.ports.attachments import AttachmentRepository
 from app.ports.conversations import ConversationRepository
@@ -141,12 +142,24 @@ class ConversationDetail(ConversationOut):
 
 
 class ConversationPatch(BaseModel):
-    # Only the title is editable; the personality snapshot can't be changed (ADR-013).
+    # The title is always editable. The personality only while the conversation is a draft, with
+    # no user message yet (ADR-022); after that its snapshot is fixed (ADR-013).
     model_config = ConfigDict(extra="forbid")
 
-    title: Annotated[
-        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=TITLE_MAX_CHARS)
-    ]
+    title: (
+        Annotated[
+            str,
+            StringConstraints(strip_whitespace=True, min_length=1, max_length=TITLE_MAX_CHARS),
+        ]
+        | None
+    ) = None
+    personality_id: str | None = Field(default=None, pattern=PERSONALITY_ID_PATTERN)
+
+    @model_validator(mode="after")
+    def _something_to_change(self) -> "ConversationPatch":
+        if self.title is None and self.personality_id is None:
+            raise ValueError("Indica title o personality_id")
+        return self
 
 
 AttachmentRef = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{32}$")]
@@ -186,6 +199,26 @@ async def _require(repo: ConversationRepository, conversation_id: str) -> Conver
     return conversation
 
 
+def _snapshot_of(personality: Personality) -> PersonalitySnapshot:
+    fields = personality.fields
+    return PersonalitySnapshot(
+        id=personality.id,
+        name=fields.name,
+        icon=fields.icon,
+        system_prompt=fields.system_prompt,
+        params=fields.params,
+    )
+
+
+async def _snapshot(
+    personalities: PersonalityRepository, personality_id: str
+) -> PersonalitySnapshot:
+    personality = await personalities.get(personality_id)
+    if personality is None:
+        raise PersonalityNotFoundError
+    return _snapshot_of(personality)
+
+
 def _resolve_model(requested: str | None, fallback: str, settings: Settings) -> str:
     model = requested or fallback or settings.default_model
     if not model:
@@ -209,15 +242,8 @@ async def create_conversation(
     personality = await personalities.get(body.personality_id or DEFAULT_PERSONALITY_ID)
     if personality is None:
         raise PersonalityNotFoundError
-    fields = personality.fields
-    model = _resolve_model(body.model, fields.default_model or "", settings)
-    snapshot = PersonalitySnapshot(
-        id=personality.id,
-        name=fields.name,
-        icon=fields.icon,
-        system_prompt=fields.system_prompt,
-        params=fields.params,
-    )
+    model = _resolve_model(body.model, personality.fields.default_model or "", settings)
+    snapshot = _snapshot_of(personality)
     return ConversationOut.of(await repo.create("Nueva conversación", model, snapshot))
 
 
@@ -235,10 +261,18 @@ async def get_conversation(
 
 
 @router.patch("/{conversation_id}")
-async def rename_conversation(
-    conversation_id: ConversationId, body: ConversationPatch, repo: Repo
+async def update_conversation(
+    conversation_id: ConversationId,
+    body: ConversationPatch,
+    repo: Repo,
+    personalities: Annotated[PersonalityRepository, Depends(get_personality_repository)],
 ) -> ConversationOut:
     await _require(repo, conversation_id)
+    if body.personality_id is not None:
+        snapshot = await _snapshot(personalities, body.personality_id)
+        if not await repo.set_personality_if_draft(conversation_id, snapshot):
+            await _require(repo, conversation_id)  # deleted meanwhile -> 404, not 409
+            raise PersonalityLockedError
     updated = await repo.update(conversation_id, title=body.title)
     if updated is None:
         raise ConversationNotFoundError
@@ -366,6 +400,16 @@ async def send_message(
         await attachments.release(user_message.id)
         await repo.delete_message(conversation_id, user_message.id)
         raise BadRequestError("Ese fichero ya se envió en otro mensaje")
+    # The snapshot was read before the slow steps above; a draft's personality may have changed
+    # in between (ADR-022). From here on the user message exists, so it can't change any more:
+    # if it did, undo and let the client send again with what it now shows.
+    current = await repo.get(conversation_id)
+    if current is None or current.personality != snapshot:
+        await attachments.release(user_message.id)
+        await repo.delete_message(conversation_id, user_message.id)
+        raise PersonalityLockedError(
+            "La personalidad de la conversación ha cambiado; vuelve a enviar el mensaje"
+        )
 
     async def save_reply(content: str, status: MessageStatus) -> None:
         await repo.add_message(conversation_id, "assistant", content, status)

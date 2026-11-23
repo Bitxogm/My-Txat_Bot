@@ -154,6 +154,12 @@ class ModelUnavailableError(AppError):
     message = "El servidor de modelos no está disponible"
 
 
+class PersonalityLockedError(AppError):
+    status_code = HTTPStatus.CONFLICT
+    code = "PERSONALITY_LOCKED"
+    message = "La personalidad se fija al empezar la conversación"
+
+
 class ContextTooLongError(AppError):
     status_code = HTTPStatus.BAD_REQUEST
     code = "CONTEXT_TOO_LONG"

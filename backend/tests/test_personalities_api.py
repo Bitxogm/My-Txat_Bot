@@ -328,6 +328,7 @@ async def test_the_personality_cannot_be_changed_afterwards(
         f"/api/conversations/{conversation['id']}", json={"personality_id": "builtin-pentester"}
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "PERSONALITY_LOCKED"
     detail = (await client.get(f"/api/conversations/{conversation['id']}")).json()
     assert detail["personality"]["id"] == DEFAULT_PERSONALITY_ID

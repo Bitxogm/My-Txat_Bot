@@ -31,6 +31,7 @@ from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
 from app.domain.builtin_osint_sources import BUILTIN_OSINT_SOURCES
 from app.domain.builtin_personalities import BUILTIN_PERSONALITIES
+from app.maintenance import sweep_stale_drafts
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.attachments = attachment_repo
         file_storage = LocalFileStorage(Path(settings.upload_dir))
         app.state.file_storage = file_storage
+        try:
+            drafts = await sweep_stale_drafts(
+                app.state.conversations, attachment_repo, file_storage
+            )
+            if drafts:
+                logger.info("Removed %d stale draft conversation(s)", drafts)
+        except Exception as exc:  # housekeeping must never stop the backend from starting
+            logger.warning("Could not sweep draft conversations: %s", type(exc).__name__)
         try:
             orphans = await sweep_orphans(file_storage, set(await attachment_repo.storage_keys()))
             if orphans:

@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Protocol
 
 from app.domain.chat import Role
@@ -27,6 +28,16 @@ class ConversationRepository(Protocol):
     ) -> Conversation | None: ...
 
     async def delete(self, conversation_id: str) -> bool: ...
+
+    async def set_personality_if_draft(
+        self, conversation_id: str, personality: PersonalitySnapshot
+    ) -> bool:
+        """Change the personality while the conversation is a draft (no user message, ADR-022)."""
+        ...
+
+    async def stale_drafts(self, created_before: datetime) -> list[str]:
+        """Drafts (no messages at all) created before the given time."""
+        ...
 
     async def messages(self, conversation_id: str) -> list[StoredMessage]:
         """Oldest first."""

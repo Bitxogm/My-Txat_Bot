@@ -126,7 +126,11 @@ async def test_migration_v1_to_v2_keeps_existing_conversations(tmp_path: Path) -
         async with db.execute("PRAGMA user_version") as cursor:
             row = await cursor.fetchone()
         assert row is not None and row[0] == len(MIGRATIONS)
-        [old_conversation] = await SqliteConversationRepository(db).list_all()
+        [old_conversation] = [
+            c
+            for c in [await SqliteConversationRepository(db).get(i) for i in await _ids(db)]
+            if c is not None
+        ]
         assert old_conversation.title == "vieja"
         assert old_conversation.personality.id is None
         assert old_conversation.personality.system_prompt == ""
@@ -146,3 +150,8 @@ async def test_builtins_removed_from_code_become_editable(
     assert dropped is not None and dropped.builtin is False
     assert await personality_repo.update("builtin-auditor-huella", fields()) is not None
     assert all(p.builtin for p in await personality_repo.list_all() if p.id in remaining)
+
+
+async def _ids(db: aiosqlite.Connection) -> list[str]:
+    async with db.execute("SELECT id FROM conversations") as cursor:
+        return [row[0] for row in await cursor.fetchall()]

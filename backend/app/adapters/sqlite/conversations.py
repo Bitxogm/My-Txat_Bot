@@ -87,10 +87,50 @@ class SqliteConversationRepository:
         return created
 
     async def list_all(self) -> list[Conversation]:
+        # Drafts (no user message yet, ADR-022) are not listed: they only exist to hold files
+        # attached before the first message, or a first message that failed.
         async with self._db.execute(
-            "SELECT * FROM conversations ORDER BY updated_at DESC, id"
+            "SELECT * FROM conversations c WHERE EXISTS ("
+            " SELECT 1 FROM messages m WHERE m.conversation_id = c.id AND m.role = 'user')"
+            " ORDER BY updated_at DESC, id"
         ) as cursor:
             return [_conversation(row) for row in await cursor.fetchall()]
+
+    async def set_personality_if_draft(
+        self, conversation_id: str, personality: PersonalitySnapshot
+    ) -> bool:
+        """Replace the personality snapshot only while there is no user message (atomically).
+        Returns whether it changed."""
+        snap = personality
+        cursor = await self._db.execute(
+            "UPDATE conversations SET personality_id = ?, personality_name = ?,"
+            " personality_icon = ?, system_prompt = ?, temperature = ?, top_p = ?, num_ctx = ?"
+            " WHERE id = ? AND NOT EXISTS ("
+            " SELECT 1 FROM messages m WHERE m.conversation_id = ? AND m.role = 'user')",
+            (
+                snap.id,
+                snap.name,
+                snap.icon,
+                snap.system_prompt,
+                snap.params.temperature,
+                snap.params.top_p,
+                snap.params.num_ctx,
+                conversation_id,
+                conversation_id,
+            ),
+        )
+        await self._db.commit()
+        return cursor.rowcount == 1
+
+    async def stale_drafts(self, created_before: datetime) -> list[str]:
+        """Ids of conversations without any message created before the given time."""
+        async with self._db.execute(
+            "SELECT id FROM conversations c WHERE c.created_at < ? AND NOT EXISTS ("
+            " SELECT 1 FROM messages m WHERE m.conversation_id = c.id)",
+            # Stored as UTC ISO text: compare in the same zone and format.
+            (created_before.astimezone(UTC).isoformat(timespec="microseconds"),),
+        ) as cursor:
+            return [row[0] for row in await cursor.fetchall()]
 
     async def get(self, conversation_id: str) -> Conversation | None:
         async with self._db.execute(
