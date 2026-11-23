@@ -134,6 +134,10 @@ class Settings(BaseSettings):
     ollama_timeout_seconds: float = Field(default=2.0, gt=0)
     ollama_chat_read_timeout_seconds: float = Field(default=300.0, gt=0)
     ollama_think: bool = False
+    # Sent as keep_alive with every chat request: how long Ollama keeps the model loaded after
+    # answering. Its default (5m) unloads it between questions, and reloading a 9-35B model on
+    # an 8 GB GPU takes over a minute. Ollama durations: "30m", "1h", "0" (unload now), "-1".
+    ollama_keep_alive: str = Field(default="30m", pattern=r"^-?\d+(ms|s|m|h)?$")
     # Context window (tokens) for local models when the personality doesn't set num_ctx. Ollama's
     # own default (4096) fills up in two or three turns with an image or long answers.
     ollama_num_ctx: int = Field(default=8192, ge=2048, le=131072)

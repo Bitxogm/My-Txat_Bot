@@ -27,12 +27,16 @@ class OllamaProvider:
         client: httpx.AsyncClient,
         chat_timeout: httpx.Timeout | None = None,
         think: bool = False,
+        keep_alive: str | None = None,
     ) -> None:
         self._client = client
         self._chat_timeout = chat_timeout or client.timeout
         # Reasoning models (qwen3.5, deepseek-r1...) otherwise "think" for tens of seconds before
         # the first visible word, and can spend the whole length budget without answering.
         self._think = think
+        # How long Ollama keeps the model in memory after a request (its default is 5 min).
+        # Loading it again can take over a minute on a small GPU.
+        self._keep_alive = keep_alive
         # Capabilities per model name, with the digest they were read for (/api/show is a
         # request per model; a re-pulled tag gets a new digest and is read again).
         self._capabilities: dict[str, tuple[str, frozenset[str]]] = {}
@@ -103,6 +107,8 @@ class OllamaProvider:
             "stream": True,
             "think": self._think,
         }
+        if self._keep_alive is not None:
+            payload["keep_alive"] = self._keep_alive
         options = _ollama_options(params)
         if options:
             payload["options"] = options

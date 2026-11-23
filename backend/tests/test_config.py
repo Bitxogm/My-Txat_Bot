@@ -1,3 +1,6 @@
+import pytest
+from pydantic import ValidationError
+
 from app.core.config import Settings
 
 
@@ -14,3 +17,20 @@ def test_docs_disabled_in_production() -> None:
 
     assert app.docs_url is None
     assert app.openapi_url is None
+
+
+def test_ollama_keep_alive_defaults_to_thirty_minutes() -> None:
+    assert Settings(_env_file=None).ollama_keep_alive == "30m"  # type: ignore[call-arg]
+
+
+@pytest.mark.parametrize("value", ["1h", "0", "-1", "90s", "300"])
+def test_ollama_keep_alive_accepts_ollama_durations(value: str) -> None:
+    settings = Settings(ollama_keep_alive=value, _env_file=None)  # type: ignore[call-arg]
+
+    assert settings.ollama_keep_alive == value
+
+
+@pytest.mark.parametrize("value", ["", "media hora", "30 m", "1d"])
+def test_ollama_keep_alive_rejects_other_values(value: str) -> None:
+    with pytest.raises(ValidationError):
+        Settings(ollama_keep_alive=value, _env_file=None)  # type: ignore[call-arg]
