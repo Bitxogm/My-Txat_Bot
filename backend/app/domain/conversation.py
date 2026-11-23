@@ -25,6 +25,10 @@ class PersonalitySnapshot:
     params: GenerationParams = field(default_factory=GenerationParams)
 
 
+# A draft (a conversation with no messages, ADR-022) older than this is deleted at startup.
+DRAFT_MAX_AGE_HOURS = 24
+
+
 @dataclass(frozen=True, slots=True)
 class Conversation:
     id: str
