@@ -5,6 +5,7 @@ import {
   FileTextIcon,
   FlagIcon,
   GraduationCapIcon,
+  MessageCircleIcon,
   SearchIcon,
   ShieldIcon,
   SparklesIcon,
@@ -19,6 +20,7 @@ import {
  */
 export const PERSONALITY_ICONS: Record<string, LucideIcon> = {
   bot: BotIcon,
+  'message-circle': MessageCircleIcon,
   flag: FlagIcon,
   crosshair: CrosshairIcon,
   shield: ShieldIcon,

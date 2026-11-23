@@ -135,6 +135,17 @@ export function renameConversation(id: string, title: string): Promise<Conversat
   });
 }
 
+/** Change the personality of a draft (no message yet, ADR-022); 409 PERSONALITY_LOCKED after. */
+export function setConversationPersonality(
+  id: string,
+  personalityId: string,
+): Promise<Conversation> {
+  return request<Conversation>(`/conversations/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: { personality_id: personalityId },
+  });
+}
+
 export async function deleteConversation(id: string): Promise<void> {
   await send(`/conversations/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }

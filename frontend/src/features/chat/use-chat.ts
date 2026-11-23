@@ -60,6 +60,8 @@ export interface UseChat {
    * a conversation). null if creating it failed (already notified).
    */
   ensureConversation: (model: string, personalityId?: string) => Promise<string | null>;
+  /** The draft's personality changed on the server (ADR-022). */
+  setPersonality: (personality: PersonalityRef | null) => void;
   /**
    * `personalityId` only matters for the first message, which creates the conversation.
    * Never rejects: a failure before the reply comes back in `failed` (already notified, except
@@ -257,6 +259,7 @@ export function useChat({ onActivity }: UseChatOptions = {}): UseChat {
     open,
     startNew,
     ensureConversation,
+    setPersonality,
     send,
     stop,
   };

@@ -11,7 +11,8 @@ import {
 } from '@/lib/api';
 import { notifyError } from '@/lib/notify-error';
 
-export const DEFAULT_PERSONALITY_ID = 'builtin-mentor-ctf';
+/** Personality of new conversations (ADR-021). */
+export const DEFAULT_PERSONALITY_ID = 'builtin-general';
 
 export interface UsePersonalities {
   personalities: Personality[];

@@ -134,6 +134,8 @@ frontend/src/
                     personalities, osint-sources
 ```
 
+Entrada al chat: abrir Txat o pulsar "Nueva conversación" lleva directo al chat con el compositor enfocado. En la cabecera, junto al selector de modelo, un desplegable de personalidad (General por defecto) que muestra icono y nombre, y la descripción en el menú. Se puede cambiar hasta el primer mensaje (si ya hay borrador, con `PATCH /api/conversations/{id}` `{ personality_id }`); después queda fijo, con candado y el aviso "La personalidad se fija al empezar la conversación". Las tarjetas de personalidad se usan en la página de gestión, con sus acciones (ver/editar, duplicar, borrar).
+
 ## Manejo de errores
 
 **Backend**

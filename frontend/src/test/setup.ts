@@ -30,3 +30,12 @@ class ResizeObserverStub {
 if (!('ResizeObserver' in window)) {
   Object.defineProperty(window, 'ResizeObserver', { writable: true, value: ResizeObserverStub });
 }
+
+// jsdom lacks pointer capture and scrollIntoView; Radix Select uses them to open and highlight.
+if (!Element.prototype.hasPointerCapture) {
+  Element.prototype.hasPointerCapture = () => false;
+  Element.prototype.releasePointerCapture = () => {};
+}
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
+}

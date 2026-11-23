@@ -23,6 +23,7 @@ export {
   renameConversation,
   replaceOsintSource,
   sendMessage,
+  setConversationPersonality,
   streamChat,
   toggleOsintSource,
   updatePersonality,
