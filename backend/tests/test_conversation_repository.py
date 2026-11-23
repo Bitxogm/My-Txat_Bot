@@ -11,6 +11,9 @@ from app.domain.conversation import title_from_message
 async def test_create_list_and_order_by_activity(repo: SqliteConversationRepository) -> None:
     first = await repo.create("Uno", "m")
     second = await repo.create("Dos", "m")
+    await repo.add_message(first.id, "user", "uno", "done")
+    await asyncio.sleep(0.001)
+    await repo.add_message(second.id, "user", "dos", "done")
     assert [c.id for c in await repo.list_all()] == [second.id, first.id]
 
     await asyncio.sleep(0.001)
@@ -22,6 +25,9 @@ async def test_create_list_and_order_by_activity(repo: SqliteConversationReposit
 async def test_rename_does_not_reorder(repo: SqliteConversationRepository) -> None:
     old = await repo.create("Old", "m")
     new = await repo.create("New", "m")
+    await repo.add_message(old.id, "user", "a", "done")
+    await asyncio.sleep(0.001)
+    await repo.add_message(new.id, "user", "b", "done")
 
     renamed = await repo.update(old.id, title="Renombrada")
 
@@ -86,3 +92,43 @@ def test_sqlite_path_rejects_bad_urls(url: str) -> None:
 )
 def test_title_from_message(content: str, title: str) -> None:
     assert title_from_message(content) == title
+
+
+# --- drafts (ADR-022) ------------------------------------------------------------------------
+
+
+async def test_drafts_are_not_listed(repo: SqliteConversationRepository) -> None:
+    draft = await repo.create("Borrador", "m")
+    replied_only = await repo.create("Solo respuesta", "m")
+    await repo.add_message(replied_only.id, "assistant", "x", "error")
+    real = await repo.create("Real", "m")
+    await repo.add_message(real.id, "user", "hola", "done")
+
+    assert [c.id for c in await repo.list_all()] == [real.id]
+    assert await repo.get(draft.id) is not None  # still reachable by id
+
+
+async def test_personality_changes_only_while_draft(repo: SqliteConversationRepository) -> None:
+    from app.domain.conversation import PersonalitySnapshot
+
+    # No personalities table rows here (FK): snapshots without id, told apart by name.
+    conversation = await repo.create("T", "m", PersonalitySnapshot(name="General"))
+    pentester = PersonalitySnapshot(name="Pentester", system_prompt="p")
+
+    assert await repo.set_personality_if_draft(conversation.id, pentester) is True
+    changed = await repo.get(conversation.id)
+    assert changed is not None and changed.personality.name == "Pentester"
+
+    await repo.add_message(conversation.id, "user", "hola", "done")
+    assert await repo.set_personality_if_draft(conversation.id, PersonalitySnapshot()) is False
+
+
+async def test_stale_drafts(repo: SqliteConversationRepository) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    draft = await repo.create("Borrador", "m")
+    used = await repo.create("Usada", "m")
+    await repo.add_message(used.id, "user", "hola", "done")
+
+    assert await repo.stale_drafts(datetime.now(UTC) - timedelta(hours=1)) == []
+    assert await repo.stale_drafts(datetime.now(UTC) + timedelta(seconds=1)) == [draft.id]
