@@ -14,7 +14,7 @@ from app.core.config import Settings
 from app.core.errors import AppError, ModelRateLimitedError
 from app.domain.builtin_personalities import BUILTIN_PERSONALITIES
 from app.domain.context import Turn, fit_history
-from app.domain.personality import DEFAULT_PERSONALITY_ID, PersonalityFields
+from app.domain.personality import MENTOR_CTF_ID, PersonalityFields
 from app.domain.prompts import compose_system_prompt
 from app.evals.checks import Question, check
 from app.ports.llm import LLMProvider
@@ -56,10 +56,15 @@ def graded(
     return Result(question, personality, answer, seconds, verdict.reasons, None, verdict.warnings)
 
 
+# The battery keeps the Mentor CTF as its default, so results stay comparable with the runs in
+# docs/evals.md; it is no longer the app's default (General, ADR-021).
+EVAL_DEFAULT_PERSONALITY_ID = MENTOR_CTF_ID
+
+
 def resolve_personality(name: str | None) -> tuple[str, PersonalityFields]:
     """A built-in personality by id ("builtin-osint") or name ("OSINT"), case-insensitive."""
     if name is None:
-        return DEFAULT_PERSONALITY_ID, BUILTIN_PERSONALITIES[DEFAULT_PERSONALITY_ID]
+        return EVAL_DEFAULT_PERSONALITY_ID, BUILTIN_PERSONALITIES[EVAL_DEFAULT_PERSONALITY_ID]
     wanted = name.strip().lower()
     for pid, fields in BUILTIN_PERSONALITIES.items():
         if wanted in (pid.lower(), fields.name.lower()):

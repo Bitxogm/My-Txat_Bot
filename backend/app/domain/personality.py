@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 from datetime import datetime
 
-DEFAULT_PERSONALITY_ID = "builtin-mentor-ctf"
+# Personality of new conversations: a direct assistant for any question (ADR-013, ADR-021).
+DEFAULT_PERSONALITY_ID = "builtin-general"
+MENTOR_CTF_ID = "builtin-mentor-ctf"
 
 # Parameter ranges, validated at the API boundary.
 TEMPERATURE_RANGE = (0.0, 2.0)

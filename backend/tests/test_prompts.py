@@ -37,7 +37,7 @@ def test_header_says_the_personality_cannot_override_the_base() -> None:
 
 
 def test_every_builtin_composes_on_top_of_the_base() -> None:
-    assert len(BUILTIN_PERSONALITIES) == 8
+    assert len(BUILTIN_PERSONALITIES) == 9
     for fields in BUILTIN_PERSONALITIES.values():
         assert compose_system_prompt(fields.system_prompt).startswith(BASE_PROMPT)
 
