@@ -32,6 +32,10 @@ Objetivo: un modelo que "aprende" de Void con el uso. Orden acordado: memoria �
 - [ ] Valoraciones 👍/👎 y corrección de respuestas en el chat
 - [ ] Exportación del dataset (respuestas buenas y corregidas) para el fine-tuning
 
+### Pendientes de UX
+- [ ] Barra lateral colapsable
+- [ ] Revisión de contraste de colores WCAG AA, en modo claro y oscuro
+
 ## Fase 4: Conocimiento
 - [ ] RAG con ChromaDB: HackTricks, man pages, writeups y notas propias
 - [ ] Indexar conversaciones marcadas como útiles
