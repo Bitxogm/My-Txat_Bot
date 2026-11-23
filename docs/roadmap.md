@@ -28,8 +28,12 @@ Cada fase se divide en tareas pequeñas. Una tarea = una rama = una PR.
 
 ## Fase 3: Personalización (memoria y valoraciones) (actual)
 Objetivo: un modelo que "aprende" de Void con el uso. Orden acordado: memoria → conocimiento → entrenamiento.
+
+**Mejora de las respuestas** (ADR-023): los pesos del modelo no cambian con el uso; lo que mejora es el sistema alrededor. Orden: RAG → correcciones → verificación de comandos → fine-tuning. Las tareas marcadas *(mejora)* en esta fase y las siguientes forman esta línea.
+
+- [x] Aviso de límite de uso (429) de un proveedor, con el tiempo de espera y la opción de seguir con el modelo local (probado a mano con Groq)
 - [ ] Memoria persistente: datos sobre el usuario, su entorno y preferencias que se inyectan en cada conversación. El modelo propone recuerdos y el usuario los aprueba, edita o borra (nada se guarda sin visto bueno)
-- [ ] Valoraciones 👍/👎 y corrección de respuestas en el chat
+- [ ] *(mejora)* Valoraciones 👍/👎 por respuesta; en 👎, un campo para escribir la corrección. Las correcciones se guardan desde ya, aunque se aprovechan en la Fase 4
 - [ ] Exportación del dataset (respuestas buenas y corregidas) para el fine-tuning
 
 ### Pendientes de UX
@@ -37,17 +41,19 @@ Objetivo: un modelo que "aprende" de Void con el uso. Orden acordado: memoria �
 - [ ] Revisión de contraste de colores WCAG AA, en modo claro y oscuro
 
 ## Fase 4: Conocimiento
-- [ ] RAG con ChromaDB: HackTricks, man pages, writeups y notas propias
+- [ ] *(mejora)* RAG con ChromaDB y el modelo de embeddings local: HackTricks, OWASP MASTG/WSTG, man pages, writeups y notas propias. Las respuestas citan el fragmento usado
+- [ ] *(mejora)* Las correcciones de la Fase 3 entran en el RAG como notas del usuario y se convierten en preguntas candidatas para la batería de evaluación
 - [ ] Indexar conversaciones marcadas como útiles
 - [ ] Búsqueda web con SearXNG (servicio propio en Compose)
 
 ## Fase 5: Asistente Kali
 - [ ] Sugerencia de comandos con explicación
+- [ ] *(mejora)* Verificación de comandos: antes de sugerir uno, comprobar en el entorno aislado con `--help`/`man` que la herramienta y sus flags existen; si no, avisar en vez de inventar
 - [ ] Ejecución solo tras confirmación explícita, en entorno aislado, con registro
 
 ## Fase 6: Modelo propio (fine-tuning)
 Cuando haya unos cientos de ejemplos valorados.
-- [ ] QLoRA con Unsloth en el host de la RTX 3060 (modelo base 7-8B)
+- [ ] *(mejora)* QLoRA con Unsloth en el Acer (RTX 3060) de un modelo base de 7-9B, con las preguntas y correcciones acumuladas (Fases 3 y 4). Solo cuando haya datos suficientes
 - [ ] Importación a Ollama como modelo propio versionado (`txat-void:vN`), comparable con el original y reversible
 
 ## Fase 7: Extras
