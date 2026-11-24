@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { MessageSquarePlusIcon, RadarIcon, Trash2Icon, VenetianMaskIcon } from 'lucide-react';
 import {
   AlertDialog,
@@ -11,7 +11,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import type { Conversation } from '@/lib/api';
+import { countConversationFeedback, type Conversation } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 interface ConversationSidebarProps {
@@ -44,6 +44,20 @@ export function ConversationSidebar({
   activePage,
 }: ConversationSidebarProps) {
   const [pendingDelete, setPendingDelete] = useState<Conversation | null>(null);
+  // Ratings go with the conversation (ADR-024): say how many before deleting it.
+  const [ratings, setRatings] = useState<{ id: string; count: number } | null>(null);
+
+  useEffect(() => {
+    if (!pendingDelete) return;
+    const controller = new AbortController();
+    const { id } = pendingDelete;
+    countConversationFeedback(id, controller.signal)
+      .then((count) => setRatings({ id, count }))
+      .catch(() => undefined); // the warning is a courtesy; deleting still works without it
+    return () => controller.abort();
+  }, [pendingDelete]);
+
+  const ratingsToLose = ratings && ratings.id === pendingDelete?.id ? ratings.count : 0;
 
   return (
     <nav aria-label="Conversaciones" className="flex h-full min-h-0 flex-col">
@@ -126,6 +140,13 @@ export function ConversationSidebar({
             <AlertDialogDescription>
               Se borrará «{pendingDelete?.title}» con todos sus mensajes. No se puede deshacer.
             </AlertDialogDescription>
+            {ratingsToLose > 0 && (
+              <p role="status" className="text-destructive text-sm">
+                También se borrarán{' '}
+                {ratingsToLose === 1 ? '1 valoración' : `${ratingsToLose} valoraciones`} de sus
+                respuestas, con sus correcciones.
+              </p>
+            )}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>

@@ -39,6 +39,8 @@ export interface ChatRequest {
 export interface ChatResult {
   model: string;
   content: string;
+  /** Id of the saved reply (persistent chat only). */
+  messageId?: number | null;
 }
 
 export interface LoginRequest {
@@ -97,6 +99,52 @@ export interface AttachmentList {
   attachments: Attachment[];
 }
 
+export type FeedbackRating = 1 | -1;
+
+export type FeedbackReason =
+  'incorrect' | 'wrong_command' | 'incomplete' | 'too_long' | 'off_personality' | 'other';
+
+/** The rating of an assistant reply (ADR-024). 👍 carries no reasons or correction. */
+export interface MessageFeedback {
+  rating: FeedbackRating;
+  reasons: FeedbackReason[];
+  correction: string | null;
+}
+
+/** A rating with the copy of the turn taken when it was saved. */
+export interface Feedback extends MessageFeedback {
+  message_id: number;
+  conversation_id: string;
+  question: string;
+  question_files: string[];
+  answer: string;
+  model: string;
+  /** The reply predates per-reply models: this is the conversation's last model. */
+  model_approximate: boolean;
+  provider: string | null;
+  personality: string | null;
+  /** null = unknown. */
+  base_prompt_version: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FeedbackPage {
+  items: Feedback[];
+  total: number;
+}
+
+export interface FeedbackFilters {
+  rating?: FeedbackRating;
+  model?: string;
+  personality?: string;
+  reason?: FeedbackReason;
+  /** YYYY-MM-DD, UTC, inclusive. */
+  from?: string;
+  to?: string;
+  conversation_id?: string;
+}
+
 export interface StoredMessage {
   id: number;
   role: ChatRole;
@@ -104,6 +152,8 @@ export interface StoredMessage {
   status: MessageStatus;
   created_at: string;
   attachments: MessageAttachment[];
+  /** Only on assistant replies that were rated. */
+  feedback?: MessageFeedback | null;
 }
 
 export interface ConversationDetail extends Conversation {

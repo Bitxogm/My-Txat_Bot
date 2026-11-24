@@ -4,8 +4,11 @@ import {
   createConversation,
   getConversation,
   isAbortError,
+  rateMessage,
   sendMessage,
+  unrateMessage,
   type MessageAttachment,
+  type MessageFeedback,
   type Conversation,
   type PersonalityRef,
   type MessageStatus as StoredStatus,
@@ -24,6 +27,20 @@ export interface UiMessage {
   status: MessageStatus;
   /** Files sent with a user message. */
   attachments: MessageAttachment[];
+  /** Id of the stored message, once the server has it (needed to rate a reply). */
+  serverId?: number;
+  /** Rating of an assistant reply (ADR-024). */
+  feedback?: MessageFeedback | null;
+}
+
+/** Replies that can be rated: stored, finished or stopped, with text. */
+export function canRate(message: UiMessage): boolean {
+  return (
+    message.role === 'assistant' &&
+    message.serverId !== undefined &&
+    (message.status === 'done' || message.status === 'stopped') &&
+    message.content.trim() !== ''
+  );
 }
 
 /**
@@ -74,7 +91,12 @@ export interface UseChat {
     attachments?: MessageAttachment[],
   ) => Promise<SendResult>;
   stop: () => void;
+  /** Rate a reply (null removes the rating). Optimistic; reverted and notified on failure. */
+  rate: (localId: string, feedback: MessageFeedback | null) => Promise<boolean>;
 }
+
+// A stopped reply is saved by the server after the connection closes: look for it a few times.
+const STOPPED_REPLY_LOOKUPS = [0, 300, 1000];
 
 function fromStored(message: StoredMessage): UiMessage | null {
   if (message.role === 'system') return null;
@@ -84,8 +106,12 @@ function fromStored(message: StoredMessage): UiMessage | null {
     content: message.content,
     status: message.status,
     attachments: message.attachments ?? [],
+    serverId: message.id,
+    feedback: message.feedback ?? null,
   };
 }
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function useChat({ onActivity }: UseChatOptions = {}): UseChat {
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -99,6 +125,11 @@ export function useChat({ onActivity }: UseChatOptions = {}): UseChat {
   // crypto.randomUUID needs a secure context, which plain-HTTP LAN access is not.
   const nextId = useRef(0);
   const onActivityRef = useRef(onActivity);
+  const messagesRef = useRef(messages);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     onActivityRef.current = onActivity;
@@ -188,6 +219,59 @@ export function useChat({ onActivity }: UseChatOptions = {}): UseChat {
     [createIfNeeded],
   );
 
+  /** The server id of a reply the user stopped (it isn't in any event), so it can be rated. */
+  const findStoppedReply = useCallback(
+    async (conversation: string, localId: string) => {
+      for (const delay of STOPPED_REPLY_LOOKUPS) {
+        if (delay) await wait(delay);
+        if (conversationRef.current !== conversation) return;
+        let detail;
+        try {
+          detail = await getConversation(conversation);
+        } catch {
+          return; // only costs the rating buttons on this reply until it is reopened
+        }
+        const last = detail.messages.at(-1);
+        if (last?.role === 'assistant' && last.status === 'stopped') {
+          updateMessage(localId, (m) => ({ ...m, serverId: last.id, feedback: null }));
+          return;
+        }
+      }
+    },
+    [updateMessage],
+  );
+
+  const rate = useCallback(
+    async (localId: string, feedback: MessageFeedback | null) => {
+      const target = messagesRef.current.find((m) => m.id === localId);
+      const serverId = target?.serverId;
+      if (target === undefined || serverId === undefined) return false;
+      const before = target.feedback ?? null;
+      updateMessage(localId, (m) => ({ ...m, feedback }));
+      try {
+        if (feedback) {
+          const saved = await rateMessage(serverId, feedback);
+          updateMessage(localId, (m) => ({
+            ...m,
+            feedback: {
+              rating: saved.rating,
+              reasons: saved.reasons,
+              correction: saved.correction,
+            },
+          }));
+        } else {
+          await unrateMessage(serverId);
+        }
+        return true;
+      } catch (error) {
+        updateMessage(localId, (m) => ({ ...m, feedback: before }));
+        notifyError(error);
+        return false;
+      }
+    },
+    [updateMessage],
+  );
+
   const send = useCallback(
     async (
       content: string,
@@ -220,17 +304,23 @@ export function useChat({ onActivity }: UseChatOptions = {}): UseChat {
           attachments.length > 0
             ? { content: text, model, attachment_ids: attachments.map((a) => a.id) }
             : { content: text, model };
-        await sendMessage(id, body, {
+        const result = await sendMessage(id, body, {
           signal: controller.signal,
           onToken: (token) => {
             received = true;
             updateMessage(assistantId, (m) => ({ ...m, content: m.content + token }));
           },
         });
-        updateMessage(assistantId, (m) => ({ ...m, status: 'done' }));
+        updateMessage(assistantId, (m) => ({
+          ...m,
+          status: 'done',
+          serverId: result.messageId ?? undefined,
+          feedback: null,
+        }));
       } catch (error) {
         if (isAbortError(error)) {
           updateMessage(assistantId, (m) => ({ ...m, status: 'stopped' }));
+          if (id && received) void findStoppedReply(id, assistantId);
         } else if (error instanceof ApiError && error.status !== null && !received) {
           // An HTTP error before the stream: nothing was stored, nothing stays on screen.
           setMessages((prev) => prev.filter((m) => m.id !== userId && m.id !== assistantId));
@@ -247,7 +337,7 @@ export function useChat({ onActivity }: UseChatOptions = {}): UseChat {
       }
       return { conversationId: id, failed };
     },
-    [createIfNeeded, updateMessage],
+    [createIfNeeded, findStoppedReply, updateMessage],
   );
 
   return {
@@ -262,5 +352,6 @@ export function useChat({ onActivity }: UseChatOptions = {}): UseChat {
     setPersonality,
     send,
     stop,
+    rate,
   };
 }

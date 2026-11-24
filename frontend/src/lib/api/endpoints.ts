@@ -9,6 +9,10 @@ import type {
   Conversation,
   ConversationDetail,
   ConversationList,
+  Feedback,
+  FeedbackFilters,
+  FeedbackPage,
+  MessageFeedback,
   HealthResponse,
   LoginRequest,
   MeResponse,
@@ -84,7 +88,8 @@ async function streamReply(
         content += token;
         onToken(token);
       } else if (event === 'done') {
-        return { model: asString(payload.model) ?? fallbackModel, content };
+        const messageId = typeof payload.message_id === 'number' ? payload.message_id : null;
+        return { model: asString(payload.model) ?? fallbackModel, content, messageId };
       } else if (event === 'error') {
         throw new ApiError({
           kind: 'server',
@@ -261,4 +266,39 @@ export function toggleOsintSource(id: string): Promise<OsintSource> {
 
 export async function deleteOsintSource(id: string): Promise<void> {
   await send(`/osint-sources/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+/** Create or replace the rating of an assistant reply. */
+export function rateMessage(messageId: number, body: MessageFeedback): Promise<Feedback> {
+  return request<Feedback>(`/messages/${messageId}/feedback`, { method: 'PUT', body });
+}
+
+export async function unrateMessage(messageId: number): Promise<void> {
+  await send(`/messages/${messageId}/feedback`, { method: 'DELETE' });
+}
+
+function feedbackQuery(filters: FeedbackFilters, extra: Record<string, number> = {}): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries({ ...filters, ...extra })) {
+    if (value !== undefined && value !== '') params.set(key, String(value));
+  }
+  const query = params.toString();
+  return query ? `?${query}` : '';
+}
+
+export function listFeedback(
+  filters: FeedbackFilters = {},
+  page: { limit?: number; offset?: number } = {},
+  signal?: AbortSignal,
+): Promise<FeedbackPage> {
+  return request<FeedbackPage>(`/feedback${feedbackQuery(filters, page)}`, { signal });
+}
+
+/** How many ratings a conversation has (they go with it when it is deleted). */
+export async function countConversationFeedback(
+  conversationId: string,
+  signal?: AbortSignal,
+): Promise<number> {
+  const page = await listFeedback({ conversation_id: conversationId }, { limit: 1 }, signal);
+  return page.total;
 }

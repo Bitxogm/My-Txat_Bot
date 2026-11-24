@@ -2,6 +2,7 @@ export { request, send, setUnauthorizedHandler } from './client';
 export type { RequestOptions } from './client';
 export {
   attachmentContentUrl,
+  countConversationFeedback,
   createConversation,
   createOsintSource,
   createPersonality,
@@ -15,17 +16,20 @@ export {
   getMe,
   listAttachments,
   listConversations,
+  listFeedback,
   listModels,
   listOsintSources,
   listPersonalities,
   login,
   logout,
+  rateMessage,
   renameConversation,
   replaceOsintSource,
   sendMessage,
   setConversationPersonality,
   streamChat,
   toggleOsintSource,
+  unrateMessage,
   updatePersonality,
   uploadAttachment,
 } from './endpoints';

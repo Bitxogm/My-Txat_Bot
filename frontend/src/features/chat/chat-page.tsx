@@ -245,6 +245,7 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
               loading={chat.isLoading}
               conversationId={chat.conversationId}
               localModel={selectedModel ? !selectedModel.remote : false}
+              onRate={chat.rate}
             />
             <Composer
               focusKey={`${chat.conversationId ?? 'new'}:${newChats}:${page ?? 'chat'}`}

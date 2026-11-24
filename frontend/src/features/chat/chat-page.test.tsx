@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
+  countConversationFeedback,
   createConversation,
   deleteAttachment,
   deleteConversation,
@@ -12,8 +13,10 @@ import {
   listConversations,
   listModels,
   listPersonalities,
+  rateMessage,
   sendMessage,
   setConversationPersonality,
+  unrateMessage,
   uploadAttachment,
   type Attachment,
   type Conversation,
@@ -38,6 +41,9 @@ vi.mock('@/lib/api', async (importOriginal) => ({
   listAttachments: vi.fn(),
   uploadAttachment: vi.fn(),
   deleteAttachment: vi.fn(),
+  rateMessage: vi.fn(),
+  unrateMessage: vi.fn(),
+  countConversationFeedback: vi.fn(),
 }));
 vi.mock('@/lib/notify-error', () => ({ notifyError: vi.fn() }));
 
@@ -148,6 +154,7 @@ beforeEach(() => {
   vi.mocked(listConversations).mockResolvedValue({ conversations: [OLD] });
   vi.mocked(createConversation).mockResolvedValue(conversation('n'.repeat(32), 'Nueva', 'b:8b'));
   vi.mocked(listAttachments).mockResolvedValue({ attachments: [] });
+  vi.mocked(countConversationFeedback).mockResolvedValue(0);
 });
 
 afterEach(() => {
@@ -840,5 +847,188 @@ describe('ChatPage rate limits', () => {
 
     await screen.findByRole('button', { name: 'Quitar a.txt' });
     expect(screen.queryByText(/saldrá de tu red/)).not.toBeInTheDocument();
+  });
+});
+
+describe('ChatPage ratings', () => {
+  function replyWith(result: { model: string; content: string; messageId?: number }) {
+    vi.mocked(sendMessage).mockImplementation(
+      async (_id, _body, { onToken }: StreamChatOptions) => {
+        onToken(result.content);
+        return result;
+      },
+    );
+  }
+
+  function replyArticle() {
+    const replies = screen.getAllByRole('article', { name: 'Asistente' });
+    return replies[replies.length - 1];
+  }
+
+  function savedFeedback(rating: 1 | -1) {
+    return {
+      message_id: 42,
+      conversation_id: 'n'.repeat(32),
+      rating,
+      reasons: [],
+      correction: null,
+      question: 'hola',
+      question_files: [],
+      answer: 'Hola',
+      model: 'b:8b',
+      model_approximate: false,
+      provider: 'ollama',
+      personality: 'General',
+      base_prompt_version: 'abcd1234',
+      created_at: '',
+      updated_at: '',
+    };
+  }
+
+  it('a finished reply can be rated with the id the server gave it', async () => {
+    replyWith({ model: 'b:8b', content: 'Hola', messageId: 42 });
+    vi.mocked(rateMessage).mockResolvedValue(savedFeedback(1));
+    const { user } = await renderReady();
+
+    await user.type(messageBox(), 'hola{Enter}');
+    await screen.findByText('Hola');
+    const up = within(replyArticle()).getByRole('button', { name: 'Respuesta útil' });
+    await user.click(up);
+
+    expect(rateMessage).toHaveBeenCalledWith(42, { rating: 1, reasons: [], correction: null });
+    await waitFor(() => expect(up).toHaveAttribute('aria-pressed', 'true'));
+    await user.click(up);
+    expect(unrateMessage).toHaveBeenCalledWith(42);
+    await waitFor(() => expect(up).toHaveAttribute('aria-pressed', 'false'));
+  });
+
+  it('a reply without a server id has no rating buttons', async () => {
+    replyWith({ model: 'b:8b', content: 'Hola' });
+    const { user } = await renderReady();
+
+    await user.type(messageBox(), 'hola{Enter}');
+    await screen.findByText('Hola');
+
+    expect(screen.queryByRole('button', { name: 'Respuesta útil' })).not.toBeInTheDocument();
+  });
+
+  it('undoes the rating and notifies when saving it fails', async () => {
+    const failure = new ApiError({
+      kind: 'server',
+      status: 500,
+      code: 'INTERNAL_ERROR',
+      message: 'Error',
+      requestId: 'r9',
+    });
+    replyWith({ model: 'b:8b', content: 'Hola', messageId: 42 });
+    vi.mocked(rateMessage).mockRejectedValue(failure);
+    const { user } = await renderReady();
+
+    await user.type(messageBox(), 'hola{Enter}');
+    await screen.findByText('Hola');
+    const up = within(replyArticle()).getByRole('button', { name: 'Respuesta útil' });
+    await user.click(up);
+
+    await waitFor(() => expect(notifyError).toHaveBeenCalledWith(failure));
+    expect(up).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('an opened conversation shows its ratings, only on replies that can be rated', async () => {
+    vi.mocked(getConversation).mockResolvedValue({
+      ...OLD,
+      messages: [
+        { id: 1, role: 'user', content: 'p', status: 'done', created_at: '', attachments: [] },
+        {
+          id: 2,
+          role: 'assistant',
+          content: 'mala',
+          status: 'done',
+          created_at: '',
+          attachments: [],
+          feedback: { rating: -1, reasons: ['incorrect'], correction: 'buena' },
+        },
+        { id: 3, role: 'user', content: 'q', status: 'done', created_at: '', attachments: [] },
+        {
+          id: 4,
+          role: 'assistant',
+          content: 'rota',
+          status: 'error',
+          created_at: '',
+          attachments: [],
+        },
+      ],
+    });
+    const { user } = await renderReady();
+
+    await user.click(await screen.findByRole('button', { name: 'Notas de un CTF' }));
+    await screen.findByText('mala');
+
+    const groups = screen.getAllByRole('group', { name: 'Valorar respuesta' });
+    expect(groups).toHaveLength(1);
+    expect(within(groups[0]).getByRole('button', { name: 'Respuesta mejorable' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await user.click(within(groups[0]).getByRole('button', { name: 'Respuesta mejorable' }));
+    expect(await screen.findByLabelText('Inventado o incorrecto')).toBeChecked();
+    // Shown as plain text in the form, never rendered.
+    expect(screen.getByLabelText('¿Cuál sería la respuesta correcta?')).toHaveValue('buena');
+  });
+
+  it('a stopped reply gets its rating buttons once the server has saved it', async () => {
+    vi.mocked(sendMessage).mockImplementation(
+      (_id, _body, { signal, onToken }: StreamChatOptions) =>
+        new Promise((_resolve, reject) => {
+          onToken('parcial');
+          signal?.addEventListener('abort', () => reject(abortError()));
+        }),
+    );
+    vi.mocked(getConversation).mockResolvedValue({
+      ...conversation('n'.repeat(32), 'Nueva', 'b:8b'),
+      messages: [
+        { id: 8, role: 'user', content: 'cuenta', status: 'done', created_at: '', attachments: [] },
+        {
+          id: 9,
+          role: 'assistant',
+          content: 'parcial',
+          status: 'stopped',
+          created_at: '',
+          attachments: [],
+        },
+      ],
+    });
+    vi.mocked(rateMessage).mockResolvedValue(savedFeedback(1));
+    const { user } = await renderReady();
+
+    await user.type(messageBox(), 'cuenta{Enter}');
+    await user.click(await screen.findByRole('button', { name: 'Detener' }));
+    await screen.findByText('Respuesta detenida.');
+
+    const up = await within(replyArticle()).findByRole('button', { name: 'Respuesta útil' });
+    await user.click(up);
+    expect(rateMessage).toHaveBeenCalledWith(9, { rating: 1, reasons: [], correction: null });
+  });
+
+  it('warns how many ratings go with a deleted conversation', async () => {
+    vi.mocked(countConversationFeedback).mockResolvedValue(2);
+    const { user } = await renderReady();
+
+    await user.click(await screen.findByRole('button', { name: 'Borrar «Notas de un CTF»' }));
+    const dialog = await screen.findByRole('alertdialog');
+
+    expect(
+      await within(dialog).findByText(/También se borrarán 2 valoraciones/),
+    ).toBeInTheDocument();
+    expect(countConversationFeedback).toHaveBeenCalledWith(OLD.id, expect.any(AbortSignal));
+  });
+
+  it('says nothing about ratings when the conversation has none', async () => {
+    const { user } = await renderReady();
+
+    await user.click(await screen.findByRole('button', { name: 'Borrar «Notas de un CTF»' }));
+    const dialog = await screen.findByRole('alertdialog');
+    await waitFor(() => expect(countConversationFeedback).toHaveBeenCalled());
+
+    expect(within(dialog).queryByText(/valoraci/)).not.toBeInTheDocument();
   });
 });
