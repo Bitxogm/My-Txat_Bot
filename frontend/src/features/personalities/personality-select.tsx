@@ -57,7 +57,9 @@ export function PersonalitySelect({
   const selected = personalities.find((p) => p.id === value);
   return (
     <Select
-      value={selected ? value : undefined}
+      // Always controlled: "" shows the placeholder until the personalities have loaded
+      // (undefined would make it uncontrolled first, which Radix warns about).
+      value={selected ? value : ''}
       onValueChange={(id) => {
         const personality = personalities.find((p) => p.id === id);
         if (personality) onChange(personality);
