@@ -26,6 +26,7 @@ import {
   type StreamChatOptions,
 } from '@/lib/api';
 import { notifyError } from '@/lib/notify-error';
+import { resetSidebarForTests, SIDEBAR_STORAGE_KEY } from '@/lib/sidebar';
 import { ChatPage } from './chat-page';
 
 vi.mock('@/lib/api', async (importOriginal) => ({
@@ -161,6 +162,8 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks();
+  window.localStorage.clear();
+  resetSidebarForTests();
 });
 
 describe('ChatPage', () => {
@@ -1080,5 +1083,157 @@ describe('ChatPage ratings', () => {
     const reply = await screen.findByRole('article', { name: 'Asistente' });
     expect(reply).toHaveAttribute('aria-current', 'true');
     expect(reply).toHaveAttribute('id', 'message-2');
+  });
+});
+
+describe('ChatPage sidebar', () => {
+  function screenIs(desktop: boolean) {
+    vi.mocked(window.matchMedia).mockImplementation(
+      (query: string) =>
+        ({
+          matches: query.includes('min-width') ? desktop : false,
+          media: query,
+          onchange: null,
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+          addListener: vi.fn(),
+          removeListener: vi.fn(),
+          dispatchEvent: vi.fn(),
+        }) as unknown as MediaQueryList,
+    );
+  }
+
+  const toggle = () => screen.getByRole('button', { name: /(Ocultar|Mostrar) conversaciones/ });
+  const navs = () => screen.queryAllByRole('navigation', { name: 'Conversaciones' });
+
+  afterEach(() => screenIs(false));
+
+  it('desktop: the button folds and unfolds the sidebar', async () => {
+    screenIs(true);
+    const { user } = await renderReady();
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    expect(toggle()).toHaveAccessibleName('Ocultar conversaciones');
+    expect(navs()).toHaveLength(1);
+
+    await user.click(toggle());
+
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle()).toHaveAccessibleName('Mostrar conversaciones');
+    expect(navs()).toHaveLength(0);
+    expect(window.localStorage.getItem(SIDEBAR_STORAGE_KEY)).toBe('collapsed');
+    await user.click(toggle());
+    expect(navs()).toHaveLength(1);
+  });
+
+  it('desktop: Ctrl+B works while typing a message', async () => {
+    screenIs(true);
+    const { user } = await renderReady();
+    await waitFor(() => expect(messageBox()).toHaveFocus());
+
+    await user.keyboard('{Control>}b{/Control}');
+
+    expect(navs()).toHaveLength(0);
+    expect(messageBox()).toHaveValue('');
+    await user.keyboard('{Control>}b{/Control}');
+    expect(navs()).toHaveLength(1);
+  });
+
+  it('desktop: Ctrl+B is not left to the browser', async () => {
+    screenIs(true);
+    await renderReady();
+    const event = new KeyboardEvent('keydown', { key: 'b', ctrlKey: true, cancelable: true });
+
+    window.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('desktop: other combinations do nothing', async () => {
+    screenIs(true);
+    const { user } = await renderReady();
+
+    await user.keyboard('{Control>}{Shift>}b{/Shift}{/Control}');
+    await user.keyboard('{Alt>}b{/Alt}');
+
+    expect(navs()).toHaveLength(1);
+  });
+
+  it('desktop: the shortcut is ignored under an open dialog', async () => {
+    screenIs(true);
+    const { user } = await renderReady();
+    await user.click(await screen.findByRole('button', { name: 'Borrar «Notas de un CTF»' }));
+    await screen.findByRole('alertdialog');
+
+    await user.keyboard('{Control>}b{/Control}');
+
+    // The dialog hides the rest of the page from the accessibility tree.
+    expect(
+      screen.getByRole('button', { name: 'Ocultar conversaciones', hidden: true }),
+    ).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('desktop: the shortcut is ignored with the 👎 form open', async () => {
+    screenIs(true);
+    vi.mocked(sendMessage).mockImplementation(
+      async (_id, _body, { onToken }: StreamChatOptions) => {
+        onToken('Hola');
+        return { model: 'b:8b', content: 'Hola', messageId: 42 };
+      },
+    );
+    const { user } = await renderReady();
+    await user.type(messageBox(), 'hola{Enter}');
+    await user.click(await screen.findByRole('button', { name: 'Respuesta mejorable' }));
+    await screen.findByRole('dialog', { name: '¿Qué falla en esta respuesta?' });
+
+    await user.keyboard('{Control>}b{/Control}');
+
+    expect(
+      screen.getByRole('button', { name: 'Ocultar conversaciones', hidden: true }),
+    ).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('desktop: folding with the focus inside the sidebar moves it to the button', async () => {
+    screenIs(true);
+    const { user } = await renderReady();
+    screen.getByRole('button', { name: 'Nueva conversación' }).focus();
+
+    await user.keyboard('{Control>}b{/Control}');
+
+    expect(toggle()).toHaveFocus();
+  });
+
+  it('desktop: the choice is remembered across reloads', async () => {
+    screenIs(true);
+    window.localStorage.setItem(SIDEBAR_STORAGE_KEY, 'collapsed');
+
+    await renderReady();
+
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+    expect(navs()).toHaveLength(0);
+  });
+
+  it('mobile: Ctrl+B does nothing and the menu opens an overlay that closes on every choice', async () => {
+    screenIs(false);
+    window.localStorage.setItem(SIDEBAR_STORAGE_KEY, 'collapsed');
+    vi.mocked(getConversation).mockResolvedValue({ ...OLD, messages: [] });
+    const { user } = await renderReady();
+    const menu = () => screen.getByRole('button', { name: 'Abrir conversaciones' });
+    const overlay = () => screen.queryByRole('dialog', { name: 'Txat_bot' });
+    expect(overlay()).not.toBeInTheDocument();
+
+    await user.keyboard('{Control>}b{/Control}');
+    expect(window.localStorage.getItem(SIDEBAR_STORAGE_KEY)).toBe('collapsed');
+
+    for (const choice of [
+      'Notas de un CTF',
+      'Nueva conversación',
+      'Personalidades',
+      'Correcciones',
+    ]) {
+      await user.click(menu());
+      const panel = await screen.findByRole('dialog', { name: 'Txat_bot' });
+      await user.click(within(panel).getByRole('button', { name: choice }));
+      await waitFor(() => expect(overlay()).not.toBeInTheDocument());
+    }
   });
 });
