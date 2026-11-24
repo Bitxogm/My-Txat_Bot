@@ -33,14 +33,16 @@ export function CodeBlock({ code, language, children }: CodeBlockProps) {
   }
 
   return (
-    <div className="my-3 overflow-hidden rounded-lg border bg-[#0d1117] text-[#e6edf3]">
-      <div className="flex items-center justify-between border-b border-white/10 px-3 py-1 text-xs">
-        <span className="max-w-[20ch] truncate font-mono text-white/60">{language ?? 'texto'}</span>
+    <div className="bg-code-bg text-code-fg my-3 overflow-hidden rounded-lg border">
+      <div className="border-code-border flex items-center justify-between border-b px-3 py-1 text-xs">
+        <span className="text-code-muted max-w-[20ch] truncate font-mono">
+          {language ?? 'texto'}
+        </span>
         <Button
           type="button"
           variant="ghost"
           size="xs"
-          className="text-white/70 hover:bg-white/10 hover:text-white"
+          className="text-code-muted hover:bg-code-border hover:text-code-fg"
           onClick={() => void handleCopy()}
           aria-label={copied ? 'Copiado' : 'Copiar código'}
         >
@@ -49,7 +51,7 @@ export function CodeBlock({ code, language, children }: CodeBlockProps) {
         </Button>
       </div>
       {code.includes(HIDDEN_MARKER) && (
-        <p className="flex items-center gap-2 border-b border-white/10 bg-amber-500/15 px-3 py-1.5 text-xs text-amber-200">
+        <p className="border-code-border bg-code-warning-bg text-code-warning flex items-center gap-2 border-b px-3 py-1.5 text-xs">
           <TriangleAlertIcon className="size-3.5 shrink-0" />
           Este bloque traía caracteres de control ocultos. Se muestran como ⟦U+…⟧ y así se copian:
           revísalo antes de pegarlo en una terminal.
