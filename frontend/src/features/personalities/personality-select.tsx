@@ -66,7 +66,13 @@ export function PersonalitySelect({
       }}
       disabled={disabled || personalities.length === 0}
     >
-      <SelectTrigger size="sm" className="max-w-44" aria-label="Personalidad">
+      {/* 80%, not the 50% of components/ui/select: the text stays legible (AA) while disabled.
+          "Personalidad" (shown while loading) is the control's label, not a hint: full color. */}
+      <SelectTrigger
+        size="sm"
+        className="data-placeholder:text-foreground max-w-44 disabled:opacity-80"
+        aria-label="Personalidad"
+      >
         <SelectValue placeholder="Personalidad">
           {selected && (
             <span className="flex min-w-0 items-center gap-1.5">
