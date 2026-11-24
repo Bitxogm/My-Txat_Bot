@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  countConversationFeedback,
+  listFeedback,
+  rateMessage,
+  unrateMessage,
   deleteAttachment,
   deleteConversation,
   renameConversation,
@@ -27,7 +31,11 @@ describe('streamChat', () => {
     );
     const onToken = vi.fn();
 
-    await expect(streamChat(body, { onToken })).resolves.toEqual({ model: 'm', content: 'Hola' });
+    await expect(streamChat(body, { onToken })).resolves.toEqual({
+      model: 'm',
+      content: 'Hola',
+      messageId: null,
+    });
     expect(onToken.mock.calls).toEqual([['Ho'], ['la']]);
     const init = fetchMock.mock.calls[0][1];
     expect(init?.method).toBe('POST');
@@ -81,13 +89,13 @@ describe('conversation endpoints', () => {
     const fetchMock = mockFetch(
       streamResponse([
         'event: token\ndata: {"content": "ok"}\n\n',
-        'event: done\ndata: {"model": "m"}\n\n',
+        'event: done\ndata: {"model": "m", "message_id": 42}\n\n',
       ]),
     );
 
     await expect(
       sendMessage('abc', { content: 'hola', model: 'm' }, { onToken: vi.fn() }),
-    ).resolves.toEqual({ model: 'm', content: 'ok' });
+    ).resolves.toEqual({ model: 'm', content: 'ok', messageId: 42 });
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('/api/conversations/abc/messages');
     expect(init?.body).toBe('{"content":"hola","model":"m"}');
@@ -149,5 +157,40 @@ describe('stream errors', () => {
       provider: 'groq',
       retryAfter: 30,
     });
+  });
+});
+
+describe('feedback endpoints', () => {
+  it('rates and unrates a reply', async () => {
+    const fetchMock = mockFetch(
+      jsonResponse(200, { rating: -1, reasons: ['incorrect'], correction: 'x' }),
+      new Response(null, { status: 204 }),
+    );
+
+    await rateMessage(7, { rating: -1, reasons: ['incorrect'], correction: 'x' });
+    await unrateMessage(7);
+
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/messages/7/feedback');
+    expect(fetchMock.mock.calls[0][1]?.method).toBe('PUT');
+    expect(fetchMock.mock.calls[0][1]?.body).toBe(
+      '{"rating":-1,"reasons":["incorrect"],"correction":"x"}',
+    );
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/messages/7/feedback');
+    expect(fetchMock.mock.calls[1][1]?.method).toBe('DELETE');
+  });
+
+  it('sends only the filters that are set', async () => {
+    const fetchMock = mockFetch(jsonResponse(200, { items: [], total: 0 }));
+
+    await listFeedback({ rating: -1, model: undefined, reason: 'too_long' }, { limit: 20 });
+
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/feedback?rating=-1&reason=too_long&limit=20');
+  });
+
+  it('counts the ratings of a conversation', async () => {
+    const fetchMock = mockFetch(jsonResponse(200, { items: [], total: 3 }));
+
+    await expect(countConversationFeedback('abc')).resolves.toBe(3);
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/feedback?conversation_id=abc&limit=1');
   });
 });
