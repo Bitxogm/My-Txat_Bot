@@ -60,8 +60,8 @@
 
 ## Valoraciones (ADR-024)
 - Los cuatro endpoints (`/api/messages/{id}/feedback`, `/api/feedback`, `/api/feedback/export`) requieren sesión.
-- La corrección es texto del usuario: ≤ 4000 caracteres, sin caracteres de control salvo saltos de línea y tabuladores, y el frontend la pinta siempre como texto plano (nunca Markdown ni HTML).
-- El export solo saca la valoración y su copia del turno: ni el system prompt, ni el contenido de los adjuntos (solo sus nombres), ni ids internos. Se descarga con `no-store`.
+- La corrección es texto del usuario: ≤ 4000 caracteres, sin caracteres de control ni invisibles (bidi, ancho cero, separadores de línea Unicode, uso privado) salvo saltos de línea y tabuladores, porque acabará en el RAG o en un conjunto de entrenamiento, y el frontend la pinta siempre como texto plano (nunca Markdown ni HTML).
+- El export solo saca la valoración y su copia del turno: ni el system prompt, ni el contenido de los adjuntos (solo sus nombres), ni ids internos. Se descarga con `no-store`. U+2028, U+2029 y U+0085 van escapados para que cada valoración sea una sola línea también para lectores que parten por ellos.
 - Con un modelo de la nube, la pregunta y la respuesta ya salieron de la red al generarse; la valoración y la corrección no salen nunca (no llegan al modelo).
 
 ## PWA (ADR-017)

@@ -1,7 +1,7 @@
 """Ratings of the assistant's replies (ADR-024): 👍/👎, reasons and a written correction."""
 
 import json
-import re
+import unicodedata
 from datetime import UTC, date, datetime
 from typing import Annotated
 
@@ -40,8 +40,13 @@ router = APIRouter(tags=["feedback"])
 Repo = Annotated[FeedbackRepository, Depends(get_feedback_repository)]
 MessageId = Annotated[int, Path(ge=1, le=2**63 - 1)]
 
-# Control characters other than tab and newlines have no place in a correction.
-_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+# Invisible and control characters (bidi overrides, zero-width, line separators, private use...)
+# could hide or reorder text in a correction that will end up in the RAG or a training set.
+# Same rule as file names (domain/attachment.py), but tabs and newlines are allowed.
+_UNSAFE = frozenset({"Cc", "Cf", "Zl", "Zp", "Co", "Cs", "Cn"})
+_ALLOWED_CONTROL = frozenset("\t\n\r")
+# JSON allows these raw inside strings, but line-based readers split on them.
+_LINE_BREAKS = {"\u2028": "\\u2028", "\u2029": "\\u2029", "\x85": "\\u0085"}
 
 
 class FeedbackIn(BaseModel):
@@ -52,6 +57,14 @@ class FeedbackIn(BaseModel):
     rating: Rating
     reasons: list[FeedbackReason] = Field(default_factory=list, max_length=len(FEEDBACK_REASONS))
     correction: str | None = Field(default=None, max_length=MAX_CORRECTION_CHARS)
+
+    @field_validator("rating", mode="before")
+    @classmethod
+    def _integer(cls, rating: object) -> object:
+        # Without this, lax mode turns true and 1.0 into 1.
+        if isinstance(rating, bool) or not isinstance(rating, int):
+            raise ValueError("rating debe ser 1 o -1")
+        return rating
 
     @field_validator("reasons")
     @classmethod
@@ -65,7 +78,9 @@ class FeedbackIn(BaseModel):
     def _clean(cls, correction: str | None) -> str | None:
         if correction is None:
             return None
-        if _CONTROL.search(correction):
+        if any(
+            unicodedata.category(ch) in _UNSAFE and ch not in _ALLOWED_CONTROL for ch in correction
+        ):
             raise ValueError("La corrección contiene caracteres no válidos")
         return correction.strip() or None
 
@@ -242,7 +257,7 @@ async def list_feedback(
 def export_line(f: Feedback) -> str:
     """One JSONL line (docs/feedback-export.md): only the rating and its copy of the turn."""
     turn = f.turn
-    return json.dumps(
+    line = json.dumps(
         {
             "question": turn.question,
             "question_files": list(turn.question_files),
@@ -260,6 +275,9 @@ def export_line(f: Feedback) -> str:
         },
         ensure_ascii=False,
     )
+    for raw, escaped in _LINE_BREAKS.items():
+        line = line.replace(raw, escaped)
+    return line
 
 
 @router.get(

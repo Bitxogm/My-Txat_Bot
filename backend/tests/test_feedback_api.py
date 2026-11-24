@@ -219,6 +219,13 @@ async def test_correction_length_limit(
         {"rating": -1, "reasons": ["inventado"]},
         {"rating": -1, "reasons": ["incorrect", "incorrect"]},
         {"rating": -1, "correction": "hola\x00"},
+        {"rating": -1, "correction": "ls \u202erm -rf"},
+        {"rating": -1, "correction": "oculto\u200b"},
+        {"rating": -1, "correction": "a\u2028b"},
+        {"rating": -1, "correction": "privado\ue000"},
+        {"rating": True},
+        {"rating": 1.0},
+        {"rating": "1"},
         {"rating": 1, "reasons": ["incorrect"]},
         {"rating": 1, "correction": "no aplica a 👍"},
         {"rating": 1, "extra": True},
@@ -379,3 +386,31 @@ async def test_rejects_malformed_message_ids(client: httpx.AsyncClient, bad_id: 
     response = await client.put(f"/api/messages/{bad_id}/feedback", json={"rating": 1})
 
     assert response.status_code == 422
+
+
+async def test_tabs_and_newlines_are_allowed_in_the_correction(
+    client: httpx.AsyncClient, fake_llm: FakeLLMProvider
+) -> None:
+    reply_id = await ask(client, await conversation(client))
+
+    body = (await rate(client, reply_id, rating=-1, correction="a\tb\r\nc\nd")).json()
+
+    assert body["correction"] == "a\tb\r\nc\nd"
+
+
+async def test_export_lines_survive_unicode_line_separators(
+    client: httpx.AsyncClient, repo: SqliteConversationRepository
+) -> None:
+    conversation_id = await conversation(client)
+    await repo.add_message(conversation_id, "user", "p\u2028q", "done")
+    reply = await repo.add_message(
+        conversation_id, "assistant", "uno\u2028dos\u2029tres\x85cuatro", "done"
+    )
+    await rate(client, reply.id, rating=1)
+
+    text = (await client.get("/api/feedback/export")).text
+
+    assert len(text.splitlines()) == 1
+    row = json.loads(text)
+    assert row["answer"] == "uno\u2028dos\u2029tres\x85cuatro"
+    assert row["question"] == "p\u2028q"
