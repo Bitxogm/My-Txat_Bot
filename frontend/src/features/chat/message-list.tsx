@@ -37,6 +37,7 @@ export function MessageList({
   conversationId = null,
   localModel = false,
   onRate,
+  highlightId = null,
 }: {
   messages: UiMessage[];
   loading?: boolean;
@@ -46,6 +47,8 @@ export function MessageList({
   localModel?: boolean;
   /** Rate a reply (null removes it). Without it, no rating buttons. */
   onRate?: (messageId: string, feedback: MessageFeedback | null) => Promise<boolean>;
+  /** Server id of a message to scroll to and mark (e.g. opened from the corrections page). */
+  highlightId?: number | null;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -53,6 +56,12 @@ export function MessageList({
     const container = containerRef.current;
     if (container) container.scrollTop = container.scrollHeight;
   }, [messages]);
+
+  // After the scroll to the bottom above, so it wins when both run.
+  useEffect(() => {
+    if (highlightId === null) return;
+    document.getElementById(`message-${highlightId}`)?.scrollIntoView?.({ block: 'center' });
+  }, [highlightId, messages]);
 
   return (
     <div
@@ -76,10 +85,17 @@ export function MessageList({
             return (
               <article
                 key={message.id}
+                id={message.serverId !== undefined ? `message-${message.serverId}` : undefined}
                 aria-label={message.role === 'user' ? 'Tú' : 'Asistente'}
+                aria-current={
+                  highlightId !== null && message.serverId === highlightId ? 'true' : undefined
+                }
                 className={cn(
                   'group flex flex-col gap-1',
                   message.role === 'user' ? 'items-end' : 'items-start',
+                  highlightId !== null &&
+                    message.serverId === highlightId &&
+                    'ring-primary/60 ring-offset-background rounded-2xl ring-2 ring-offset-4',
                 )}
               >
                 {conversationId && message.attachments.some((a) => a.kind === 'image') && (

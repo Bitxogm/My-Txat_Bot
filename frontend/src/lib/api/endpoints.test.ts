@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   countConversationFeedback,
+  exportFeedback,
   listFeedback,
   rateMessage,
   unrateMessage,
@@ -192,5 +193,37 @@ describe('feedback endpoints', () => {
 
     await expect(countConversationFeedback('abc')).resolves.toBe(3);
     expect(fetchMock.mock.calls[0][0]).toBe('/api/feedback?conversation_id=abc&limit=1');
+  });
+
+  it('downloads the export as a file with the server name', async () => {
+    const fetchMock = mockFetch(
+      new Response('{"rating":1}\n', {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/x-ndjson',
+          'Content-Disposition': 'attachment; filename="txat-feedback-2026-11-24.jsonl"',
+        },
+      }),
+    );
+
+    const { blob, filename } = await exportFeedback({ rating: 1 });
+
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/feedback/export?rating=1');
+    expect(new Headers(fetchMock.mock.calls[0][1]?.headers).get('Accept')).toBe(
+      'application/x-ndjson',
+    );
+    expect(filename).toBe('txat-feedback-2026-11-24.jsonl');
+    expect(await blob.text()).toBe('{"rating":1}\n');
+  });
+
+  it('falls back to a fixed name when the header has an odd one', async () => {
+    mockFetch(
+      new Response('', {
+        status: 200,
+        headers: { 'Content-Disposition': 'attachment; filename="../../x"' },
+      }),
+    );
+
+    await expect(exportFeedback()).resolves.toMatchObject({ filename: 'txat-feedback.jsonl' });
   });
 });

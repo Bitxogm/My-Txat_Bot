@@ -11,6 +11,7 @@ import {
   getConversation,
   listAttachments,
   listConversations,
+  listFeedback,
   listModels,
   listPersonalities,
   rateMessage,
@@ -44,6 +45,7 @@ vi.mock('@/lib/api', async (importOriginal) => ({
   rateMessage: vi.fn(),
   unrateMessage: vi.fn(),
   countConversationFeedback: vi.fn(),
+  listFeedback: vi.fn(),
 }));
 vi.mock('@/lib/notify-error', () => ({ notifyError: vi.fn() }));
 
@@ -1030,5 +1032,53 @@ describe('ChatPage ratings', () => {
     await waitFor(() => expect(countConversationFeedback).toHaveBeenCalled());
 
     expect(within(dialog).queryByText(/valoraci/)).not.toBeInTheDocument();
+  });
+
+  it('opens the corrections page and goes back to a rated reply', async () => {
+    vi.mocked(listFeedback).mockResolvedValue({
+      items: [
+        {
+          message_id: 2,
+          conversation_id: OLD.id,
+          rating: -1,
+          reasons: [],
+          correction: 'buena',
+          question: 'p',
+          question_files: [],
+          answer: 'mala',
+          model: 'a:7b',
+          model_approximate: false,
+          provider: 'ollama',
+          personality: 'Pentester',
+          base_prompt_version: null,
+          created_at: '2026-11-24T10:00:00+00:00',
+          updated_at: '2026-11-24T10:00:00+00:00',
+        },
+      ],
+      total: 1,
+    });
+    vi.mocked(getConversation).mockResolvedValue({
+      ...OLD,
+      messages: [
+        { id: 1, role: 'user', content: 'p', status: 'done', created_at: '', attachments: [] },
+        {
+          id: 2,
+          role: 'assistant',
+          content: 'mala',
+          status: 'done',
+          created_at: '',
+          attachments: [],
+        },
+      ],
+    });
+    const { user } = await renderReady();
+
+    await user.click(screen.getByRole('button', { name: 'Correcciones' }));
+    await user.click(await screen.findByRole('button', { name: 'Ir a la conversación' }));
+
+    expect(getConversation).toHaveBeenCalledWith(OLD.id, expect.any(AbortSignal));
+    const reply = await screen.findByRole('article', { name: 'Asistente' });
+    expect(reply).toHaveAttribute('aria-current', 'true');
+    expect(reply).toHaveAttribute('id', 'message-2');
   });
 });

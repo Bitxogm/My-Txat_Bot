@@ -302,3 +302,19 @@ export async function countConversationFeedback(
   const page = await listFeedback({ conversation_id: conversationId }, { limit: 1 }, signal);
   return page.total;
 }
+
+export interface FeedbackExport {
+  blob: Blob;
+  filename: string;
+}
+
+const EXPORT_FILENAME = /filename="([\w.-]+)"/;
+
+/** The matching ratings as a JSONL file (docs/feedback-export.md), to hand to the browser. */
+export async function exportFeedback(filters: FeedbackFilters = {}): Promise<FeedbackExport> {
+  const response = await send(`/feedback/export${feedbackQuery(filters)}`, {
+    accept: 'application/x-ndjson',
+  });
+  const match = EXPORT_FILENAME.exec(response.headers.get('Content-Disposition') ?? '');
+  return { blob: await response.blob(), filename: match?.[1] ?? 'txat-feedback.jsonl' };
+}

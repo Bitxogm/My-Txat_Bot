@@ -152,6 +152,8 @@ Entrada al chat: abrir Txat o pulsar "Nueva conversación" lleva directo al chat
 
 Valoraciones en el chat (ADR-024): bajo cada respuesta del asistente que se puede valorar (guardada, terminada o detenida, con texto) van 👍 y 👎, discretos hasta pasar el ratón o enfocarlos, siempre visibles en pantallas táctiles y en las ya valoradas. 👍 se guarda al momento y otro clic lo quita. 👎 abre un diálogo con los motivos (casillas) y "¿Cuál sería la respuesta correcta?" (máx. 4000 caracteres, con contador), todo opcional; al reabrirlo se edita lo guardado o se quita. El cambio se ve al instante y se deshace con un aviso si el servidor falla. El id de la respuesta llega en el evento `done`; el de una respuesta detenida se busca recargando la conversación. La corrección se muestra siempre como texto plano. Al borrar una conversación, el diálogo avisa de cuántas valoraciones se pierden.
 
+Página "Correcciones" (barra lateral): lista paginada ("Cargar más", 20 por página) de las valoraciones, con filtros (valoración, motivo, modelo, personalidad, fechas). Cada una muestra la pregunta, la respuesta y la corrección lado a lado (apiladas en móvil), siempre como texto plano, con el modelo (y si es aproximado), la personalidad y la huella de la capa base ("desconocido" si no se sabe). Se edita con el mismo formulario del chat, se borra con confirmación, y "Ir a la conversación" la abre desplazada a esa respuesta, marcada. "Exportar JSONL" descarga el export con los filtros activos, a través del cliente API (un 401 lleva al login).
+
 ## Manejo de errores
 
 **Backend**
