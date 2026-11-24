@@ -11,6 +11,7 @@ export {
   deleteOsintSource,
   deletePersonality,
   duplicatePersonality,
+  exportFeedback,
   getConversation,
   getHealth,
   getMe,
@@ -33,7 +34,7 @@ export {
   updatePersonality,
   uploadAttachment,
 } from './endpoints';
-export type { StreamChatOptions } from './endpoints';
+export type { FeedbackExport, StreamChatOptions } from './endpoints';
 export { ApiError, isAbortError } from './errors';
 export type { ApiErrorKind } from './errors';
 export type * from './types';
