@@ -1,10 +1,11 @@
 import { lazy, Suspense, useEffect, useRef } from 'react';
 import { ErrorBoundary } from '@/components/error-boundary';
-import { attachmentContentUrl } from '@/lib/api';
+import { attachmentContentUrl, type MessageFeedback } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { FeedbackButtons } from '@/features/feedback/feedback-buttons';
 import { AttachmentChip } from './attachment-chip';
 import { PendingReply } from './pending-reply';
-import type { UiMessage } from './use-chat';
+import { canRate, type UiMessage } from './use-chat';
 
 const STATUS_NOTE: Partial<Record<UiMessage['status'], string>> = {
   stopped: 'Respuesta detenida.',
@@ -35,6 +36,7 @@ export function MessageList({
   loading = false,
   conversationId = null,
   localModel = false,
+  onRate,
 }: {
   messages: UiMessage[];
   loading?: boolean;
@@ -42,6 +44,8 @@ export function MessageList({
   conversationId?: string | null;
   /** The reply comes from a local model, which may have to load before the first token. */
   localModel?: boolean;
+  /** Rate a reply (null removes it). Without it, no rating buttons. */
+  onRate?: (messageId: string, feedback: MessageFeedback | null) => Promise<boolean>;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -74,7 +78,7 @@ export function MessageList({
                 key={message.id}
                 aria-label={message.role === 'user' ? 'Tú' : 'Asistente'}
                 className={cn(
-                  'flex flex-col gap-1',
+                  'group flex flex-col gap-1',
                   message.role === 'user' ? 'items-end' : 'items-start',
                 )}
               >
@@ -153,6 +157,12 @@ export function MessageList({
                   >
                     {note.text}
                   </span>
+                )}
+                {onRate && canRate(message) && (
+                  <FeedbackButtons
+                    feedback={message.feedback ?? null}
+                    onRate={(feedback) => onRate(message.id, feedback)}
+                  />
                 )}
               </article>
             );
