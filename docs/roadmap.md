@@ -37,6 +37,7 @@ Objetivo: un modelo que "aprende" de Void con el uso. Orden acordado: memoria �
 - [ ] Exportación del dataset (respuestas buenas y corregidas) para el fine-tuning: el formato de entrenamiento (pares instrucción/respuesta) se derivará del JSONL de las valoraciones
 
 ### Pendientes de UX
+Spec: [ux-sidebar-contrast](specs/ux-sidebar-contrast.md).
 - [ ] Barra lateral colapsable
 - [ ] Revisión de contraste de colores WCAG AA, en modo claro y oscuro
 
