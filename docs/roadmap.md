@@ -38,7 +38,7 @@ Objetivo: un modelo que "aprende" de Void con el uso. Orden acordado: memoria �
 
 ### Pendientes de UX
 Spec: [ux-sidebar-contrast](specs/ux-sidebar-contrast.md).
-- [ ] Barra lateral colapsable
+- [x] Barra lateral colapsable (botón y Ctrl+B en escritorio, se recuerda; panel superpuesto en móvil)
 - [ ] Revisión de contraste de colores WCAG AA, en modo claro y oscuro
 
 ## Fase 4: Conocimiento

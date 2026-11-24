@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { LogOutIcon, MenuIcon } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { LogOutIcon, MenuIcon, PanelLeftCloseIcon, PanelLeftOpenIcon } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
@@ -18,6 +18,14 @@ import {
 } from '@/features/personalities/use-personalities';
 import { setConversationPersonality, type Personality } from '@/lib/api';
 import { notifyError } from '@/lib/notify-error';
+import {
+  isDesktop,
+  isSidebarCollapsed,
+  isSidebarShortcut,
+  setSidebarCollapsed,
+  useSidebarCollapsed,
+} from '@/lib/sidebar';
+import { cn } from '@/lib/utils';
 import { Composer } from './composer';
 import { RateLimitNotice, type RateLimit } from './rate-limit-notice';
 import { useAttachments } from './use-attachments';
@@ -39,7 +47,32 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
   const attachments = useAttachments();
   const [draft, setDraft] = useState('');
   const [rateLimit, setRateLimit] = useState<RateLimit | null>(null);
+  // Mobile: the sidebar is an overlay panel, closed on every load. Desktop: it can be folded
+  // away, and that choice is remembered (lib/sidebar.ts).
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { collapsed } = useSidebarCollapsed();
+  const sidebarToggle = useRef<HTMLButtonElement>(null);
+  const asideRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (!isSidebarShortcut(event) || !isDesktop()) return;
+      // Not under an open dialog (delete confirmation, the 👎 form...).
+      if (document.querySelector('[role="dialog"][data-state="open"], [role="alertdialog"]'))
+        return;
+      event.preventDefault();
+      foldSidebar(!isSidebarCollapsed());
+    }
+    // Capture phase: it works with the focus in the message box too.
+    window.addEventListener('keydown', onKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
+  }, []);
+
+  function foldSidebar(fold: boolean) {
+    // Focus inside the sidebar would be lost when it goes: move it to the button.
+    if (fold && asideRef.current?.contains(document.activeElement)) sidebarToggle.current?.focus();
+    setSidebarCollapsed(fold);
+  }
   const [page, setPage] = useState<SettingsPage | null>(null);
   const [personalityId, setPersonalityId] = useState(DEFAULT_PERSONALITY_ID);
   // Bumped by "Nueva conversación" so the composer takes the focus again.
@@ -177,12 +210,18 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
 
   return (
     <div className="flex h-svh">
-      <aside className="bg-sidebar hidden w-64 shrink-0 flex-col border-r md:flex">
-        <div className="border-b px-4 py-3">
-          <h1 className="font-heading text-base font-semibold">Txat_bot</h1>
-        </div>
-        {sidebar}
-      </aside>
+      {!collapsed && (
+        <aside
+          id="conversations-sidebar"
+          ref={asideRef}
+          className="bg-sidebar hidden w-64 shrink-0 flex-col border-r md:flex"
+        >
+          <div className="border-b px-4 py-3">
+            <h1 className="font-heading text-base font-semibold">Txat_bot</h1>
+          </div>
+          {sidebar}
+        </aside>
+      )}
       <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
         <SheetContent side="left" className="w-72 gap-0 p-0">
           <SheetTitle className="border-b px-4 py-3 text-base">Txat_bot</SheetTitle>
@@ -202,7 +241,27 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
             >
               <MenuIcon />
             </Button>
-            <span className="font-heading text-base font-semibold md:hidden">Txat_bot</span>
+            <Button
+              ref={sidebarToggle}
+              variant="ghost"
+              size="icon-sm"
+              className="hidden md:inline-flex"
+              onClick={() => foldSidebar(!collapsed)}
+              aria-expanded={!collapsed}
+              aria-controls={collapsed ? undefined : 'conversations-sidebar'}
+              aria-label={collapsed ? 'Mostrar conversaciones' : 'Ocultar conversaciones'}
+              title={`${collapsed ? 'Mostrar' : 'Ocultar'} conversaciones (Ctrl+B)`}
+            >
+              {collapsed ? <PanelLeftOpenIcon /> : <PanelLeftCloseIcon />}
+            </Button>
+            <span
+              className={cn(
+                'font-heading text-base font-semibold',
+                collapsed ? 'md:inline' : 'md:hidden',
+              )}
+            >
+              Txat_bot
+            </span>
           </div>
           <div className="flex items-center gap-1">
             {page === null && (

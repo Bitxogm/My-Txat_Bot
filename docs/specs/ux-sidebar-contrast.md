@@ -1,6 +1,6 @@
 # Spec: barra lateral colapsable y contrastes WCAG AA
 
-Estado: borrador
+Estado: aprobada · barra lateral implementada (PR feat/collapsible-sidebar) · contrastes pendientes
 
 ## Objetivo
 

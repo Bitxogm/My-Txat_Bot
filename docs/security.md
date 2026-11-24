@@ -12,6 +12,7 @@
 ## Autenticación
 - Login de un solo usuario (`AUTH_USERNAME`). La contraseña se guarda como hash argon2id en `backend/.env` (`AUTH_PASSWORD_HASH`, **entre comillas simples**: sin ellas Compose expande los `$` y el hash se rompe). Se genera con `uv run python -m app.cli hash-password`.
 - Sesión: cookie `txat_session` firmada con `SESSION_SECRET` (itsdangerous, HMAC-SHA256), `httpOnly`, `SameSite=Strict`, `Path=/api`, caducidad `SESSION_TTL_HOURS` (72 h por defecto). `Secure` solo con `COOKIE_SECURE=true` (HTTPS). Nada de tokens en `localStorage`.
+- `localStorage` solo guarda preferencias de interfaz (`txat-theme`, `txat-sidebar`): nunca tokens, sesión ni datos de las conversaciones.
 - Revocación: el logout invalida todas las sesiones emitidas hasta ese momento (un solo usuario, logout global). Reiniciar el backend también las cierra, igual que cambiar la contraseña o `SESSION_SECRET`.
 - Fail closed: sin usuario, un hash argon2id válido y un secreto de ≥ 32 caracteres, el login y la API protegida responden 503 (y se avisa en el log al arrancar).
 - `/api/health` y `/api/auth/login` son públicos (healthcheck de Docker y login); el resto de la API exige sesión.
