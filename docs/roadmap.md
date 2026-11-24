@@ -59,3 +59,6 @@ Cuando haya unos cientos de ejemplos valorados.
 ## Fase 7: Extras
 - [ ] Voz: faster-whisper (STT) + Piper (TTS)
 - [ ] Backups automáticos de `data/`
+
+## Despliegue en el Acer
+- [ ] Ampliar el Acer a 32 GB de RAM es requisito para el despliegue: con 16 GB, `qwen3.6:35b-a3b` (22 GB, expertos en RAM) no cabe con holgura junto al sistema y Docker (`docs/research/moe-offload.md`)
