@@ -33,8 +33,8 @@ Objetivo: un modelo que "aprende" de Void con el uso. Orden acordado: memoria �
 
 - [x] Aviso de límite de uso (429) de un proveedor, con el tiempo de espera y la opción de seguir con el modelo local (probado a mano con Groq)
 - [ ] Memoria persistente: datos sobre el usuario, su entorno y preferencias que se inyectan en cada conversación. El modelo propone recuerdos y el usuario los aprueba, edita o borra (nada se guarda sin visto bueno)
-- [ ] *(mejora)* Valoraciones 👍/👎 por respuesta; en 👎, un campo para escribir la corrección. Las correcciones se guardan desde ya, aunque se aprovechan en la Fase 4
-- [ ] Exportación del dataset (respuestas buenas y corregidas) para el fine-tuning
+- [x] *(mejora)* Valoraciones 👍/👎 por respuesta; en 👎, motivos y la corrección escrita, con la página "Correcciones" y el export JSONL ([formato](feedback-export.md), ADR-024). Se guardan desde ya; se aprovechan en la Fase 4
+- [ ] Exportación del dataset (respuestas buenas y corregidas) para el fine-tuning: el formato de entrenamiento (pares instrucción/respuesta) se derivará del JSONL de las valoraciones
 
 ### Pendientes de UX
 - [ ] Barra lateral colapsable
