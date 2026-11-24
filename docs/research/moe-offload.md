@@ -147,7 +147,40 @@ Propuesta (sin cambiar de motor):
   hay que leer las respuestas de revisión manual.
 - **Licencia**: Qwen Community License, no Apache 2.0. Sin problema en uso personal.
 
-## Plan de prueba propuesto (no ejecutado)
+## Plan B
+
+Decisión del 2026-11-24: la fase A del plan siguiente no se ejecuta, porque una ganancia estimada del
+10-20 % no compensa instalar CUDA 12 y compilar. Se queda Ollama como único motor (ADR-020).
+
+Si Ollama añade a su biblioteca Qwen3.8-Flash-Next u otro MoE mayor que quepa en la X570, se prueba sin
+cambiar de motor ni compilar nada (desde `backend/`, un paso cada vez):
+
+1. Descargarlo con Ollama:
+   ```bash
+   ollama pull <modelo>
+   ```
+2. Medirlo con Pentester:
+   ```bash
+   uv run python -m app.cli eval --models <modelo> --think off --personality Pentester
+   ```
+3. Medirlo con Mentor CTF (la personalidad por defecto de la batería):
+   ```bash
+   uv run python -m app.cli eval --models <modelo> --think off
+   ```
+4. Medir la referencia con Pentester:
+   ```bash
+   uv run python -m app.cli eval --models qwen3.6:35b-a3b --think off --personality Pentester
+   ```
+5. Medir la referencia con Mentor CTF:
+   ```bash
+   uv run python -m app.cli eval --models qwen3.6:35b-a3b --think off
+   ```
+6. Añadir las filas a `docs/evals.md` y leer a mano las preguntas 11, 12, 14 y 15.
+
+Mismo criterio de éxito que en el plan siguiente. Con un modelo así la X570 va justa de RAM: cerrar
+lo que no haga falta antes de medir y comprobar con `ollama ps` cuánto queda en la GPU.
+
+## Plan de prueba propuesto (no ejecutado; fase A descartada, ver Plan B)
 
 Dos fases: la A sin descargar ningún modelo (Qwen3.6 en llama.cpp frente a Ollama); la B solo si la
 comprobación del paso 7 sale bien. Un paso cada vez, desde la X570. Ningún paso usa `sudo`.
