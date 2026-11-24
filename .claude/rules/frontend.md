@@ -9,6 +9,7 @@ paths:
 - Toda llamada HTTP pasa por `src/lib/api`. `fetch` directo fuera de ahí está bloqueado por ESLint.
 - Errores: el cliente API devuelve errores tipados; la UI los muestra con Sonner (`toast.error`) incluyendo el `request_id` en los 5xx.
 - Componentes base con shadcn/ui (`npx shadcn add ...`). No editar `src/components/ui/` salvo necesidad clara.
+- Colores solo con variables del tema (`src/index.css`, `:root` y `.dark`, también `--code-*` para los bloques de código), nunca colores sueltos en componentes. `src/test/theme-contrast.test.ts` comprueba WCAG AA en los dos temas: un elemento nuevo con una combinación de colores nueva lleva su fila ahí y en la spec `ux-sidebar-contrast`.
 - Sin `any`. Nada de tokens ni datos sensibles en `localStorage`/`sessionStorage`; la sesión va en cookie httpOnly.
 - Antes de dar algo por terminado: `npm run lint && npm run format:check && npx tsc -b && npm run test -- --run`.
 - TypeScript fijado en `~6.0`: typescript-eslint aún no soporta TS 7 (peer `<6.1`). No subirlo hasta que lo soporte.

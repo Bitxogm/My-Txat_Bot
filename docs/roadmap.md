@@ -39,7 +39,7 @@ Objetivo: un modelo que "aprende" de Void con el uso. Orden acordado: memoria 鈫
 ### Pendientes de UX
 Spec: [ux-sidebar-contrast](specs/ux-sidebar-contrast.md).
 - [x] Barra lateral colapsable (bot贸n y Ctrl+B en escritorio, se recuerda; panel superpuesto en m贸vil)
-- [ ] Revisi贸n de contraste de colores WCAG AA, en modo claro y oscuro
+- [x] Revisi贸n de contraste de colores WCAG AA, en modo claro y oscuro (comprobada en CI por `theme-contrast.test.ts`)
 
 ## Fase 4: Conocimiento
 - [ ] *(mejora)* RAG con ChromaDB y el modelo de embeddings local: HackTricks, OWASP MASTG/WSTG, man pages, writeups y notas propias. Las respuestas citan el fragmento usado

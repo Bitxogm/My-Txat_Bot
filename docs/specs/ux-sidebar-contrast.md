@@ -1,6 +1,6 @@
 # Spec: barra lateral colapsable y contrastes WCAG AA
 
-Estado: aprobada · barra lateral implementada (PR feat/collapsible-sidebar) · contrastes pendientes
+Estado: implementada (barra lateral #54; contrastes en fix/wcag-aa-contrast)
 
 ## Objetivo
 
@@ -41,6 +41,8 @@ de UX de la Fase 3 (`docs/roadmap.md`).
 
 ## Decisiones
 
+- **Tonos mates**: el fondo claro deja de ser blanco puro y el oscuro de ser casi negro (escala de
+  grises algo más apagada en los dos temas), sin bajar de AA.
 - **Barra plegada**: se oculta del todo; el botón para mostrarla queda en la cabecera.
 - **Bloques de código**: sus colores fijos (`#0d1117`, `white/60`, ámbar y el CSS de `github-dark`)
   pasan a variables `--code-bg`, `--code-fg` y `--code-muted` en `index.css`, con el mismo valor en
@@ -60,31 +62,58 @@ de UX de la Fase 3 (`docs/roadmap.md`).
 
 ## Contrastes medidos
 
-Se rellena en la PR de contrastes. Ratio WCAG 2.x (relación de luminancia relativa); "AA" = 4,5:1
-texto normal, 3:1 texto grande, iconos y bordes de controles.
+Ratio WCAG 2.x (luminancia relativa), calculado desde las variables de `index.css` por
+`frontend/src/test/theme-contrast.test.ts`, que falla en CI si alguna fila baja de su mínimo
+(`CONTRAST_TABLE=1 npx vitest run src/test/theme-contrast.test.ts` imprime la tabla). "AA" = 4,5:1
+texto normal, 3:1 texto grande, iconos y bordes de controles. Los colores con transparencia se miden
+mezclados con su fondo real, no con el selector de color del navegador.
 
 | Elemento | Primer plano / fondo | Claro antes | Claro después | Oscuro antes | Oscuro después | Mínimo |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| Texto normal | `foreground` / `background` | | | | | 4,5 |
-| Texto secundario | `muted-foreground` / `background` | | | | | 4,5 |
-| Texto secundario en barra lateral | `muted-foreground` / `sidebar` | | | | | 4,5 |
-| Texto secundario en fila activa o al pasar el ratón | `muted-foreground` / `muted` | | | | | 4,5 |
-| Placeholder | `muted-foreground` / `input` | | | | | 4,5 |
-| Enlace | | | | | | 4,5 |
-| Bloque de código (texto) | `code-fg` / `code-bg` | | | | | 4,5 |
-| Bloque de código (etiqueta y comentarios) | `code-muted` / `code-bg` | | | | | 4,5 |
-| Bloque de código (resaltado, peor token) | token / `code-bg` | | | | | 4,5 |
-| Personalidad bloqueada | `muted-foreground` / `background` | | | | | 4,5 |
-| Personalidad deshabilitada | | | | | | 4,5 |
-| 👍/👎 sin valorar (icono) | | | | | | 3 |
-| 👍 activo (icono) | `primary` / `background` | | | | | 3 |
-| 👎 activo (icono) | `destructive` / `background` | | | | | 3 |
-| Texto de error | `destructive` / `background` | | | | | 4,5 |
-| Borde de campo | `input`/`border` / `background` | | | | | 3 |
+| Texto normal | `foreground` / `background` | 19,79 | 18,15 | 18,96 | 17,34 | 4,5 |
+| Texto secundario | `muted-foreground` / `background` | 4,73 | 5,50 | 7,63 | 6,98 | 4,5 |
+| Texto secundario en barra lateral | `muted-foreground` / `sidebar` | 4,53 | 5,19 | 6,91 | 6,43 | 4,5 |
+| Texto secundario sobre `muted` (respuesta del asistente, fila activa) | `muted-foreground` / `muted` | **4,34** | 4,88 | 5,83 | 5,63 | 4,5 |
+| Placeholder | `muted-foreground` / campo (`input`/30 en oscuro) | 4,73 | 5,50 | 7,04 | 5,21 | 4,5 |
+| Enlace en una respuesta | `primary` / `muted` | 16,42 | 14,58 | 12,00 | 11,59 | 4,5 |
+| Bloque de código (texto) | `code-fg` / `code-bg` | 16,02 | 16,02 | 16,02 | 16,02 | 4,5 |
+| Bloque de código (etiqueta y botón copiar) | `code-muted` / `code-bg` | 7,21 | 7,78 | 7,21 | 7,78 | 4,5 |
+| Bloque de código (resaltado, peor token) | token / `code-bg` | **4,08** | 6,15 | **4,08** | 6,15 | 4,5 |
+| Aviso de caracteres ocultos en código | `code-warning` / `code-warning-bg` | — | 11,94 | — | 11,94 | 4,5 |
+| Personalidad bloqueada | `muted-foreground` / `background` | 4,73 | 5,50 | 7,63 | 6,98 | 4,5 |
+| Personalidad deshabilitada | `foreground` al 50 % → 80 % / `background` (+ `input`/30 en oscuro) | **3,71** | 10,58 | 4,97 | 9,03 | 4,5 |
+| Personalidad cargando ("Personalidad", deshabilitado) | `muted-foreground` → `foreground`, al 80 % | **3,39** | 10,58 | **4,34** | 9,03 | 4,5 |
+| 👍/👎 sin valorar (icono) | `foreground` / `background` | 19,79 | 18,15 | 18,96 | 17,34 | 3 |
+| 👍 activo (icono) | `primary` / `background` | 17,91 | 16,42 | 15,72 | 14,38 | 3 |
+| 👎 activo (icono) | `destructive` / `background` | 4,76 | 4,98 | 6,84 | 6,26 | 3 |
+| Texto de error | `destructive` / `background` | 4,76 | 4,98 | 6,84 | 6,26 | 4,5 |
+| Borde de campo | `input` / `background` | **1,26** | 3,21 | **1,47** | 3,23 | 3 |
 
-Los colores con transparencia se miden mezclados con su fondo real, no con el selector de color del
-navegador. Los elementos deshabilitados no tienen mínimo obligatorio en WCAG, pero se piden aquí porque el
-desplegable bloqueado muestra información (la personalidad fijada).
+En negrita, los que no llegaban. Cambios:
+
+- Tonos mates, a petición de Void (el blanco puro y el casi negro brillaban demasiado):
+  - claro: `--background` 1 → 0,97; `--card`/`--popover` 0,985; `--muted`, `--secondary`, `--accent` y
+    `--sidebar-accent` 0,97 → 0,93; `--sidebar` 0,985 → 0,95; `--border` 0,922 → 0,88;
+  - oscuro: `--background` 0,145 → 0,2; `--card`/`--popover` 0,205 → 0,24; `--muted`, `--secondary`,
+    `--accent` y `--sidebar-accent` 0,269 → 0,28; `--sidebar` 0,205 → 0,235.
+- `--muted-foreground` (claro): `oklch(0.556 0 0)` → `oklch(0.5 0 0)`.
+- `--destructive` (claro): `oklch(0.577 0.245 27.325)` → `oklch(0.55 0.22 27.325)` (sobre el fondo mate
+  se quedaba en 4,37).
+- `--input` (claro): `oklch(0.922 0 0)` → `oklch(0.63 0 0)`; (oscuro): blanco al 15 % → 35 %. `--border` no
+  cambia: los separadores son decorativos y WCAG solo pide 3:1 en los límites de los controles.
+- Bloques de código: `--code-bg`, `--code-fg`, `--code-muted`, `--code-border`, `--code-warning`,
+  `--code-warning-bg` (iguales en los dos temas). El encabezado de highlight.js (`.hljs-section`,
+  `#1f6feb`, 4,08) pasa a `--code-heading` (`#58a6ff`, 7,49); el peor token que queda es el
+  comentario (`#8b949e`, 6,15). Un test comprueba todos los colores del tema `github-dark`.
+- Desplegable de personalidad deshabilitado: `disabled:opacity-80` en `personality-select.tsx`, y el
+  texto "Personalidad" que muestra mientras cargan las personalidades pasa de `muted-foreground` a
+  `foreground` (es la etiqueta del control, no una pista).
+- Revisado y fuera de la tabla: el borde de un campo en oscuro contra su propio relleno da 2,47 (WCAG
+  1.4.11 se cumple con el fondo de la página, 3,23); el borde de la personalidad bloqueada usa
+  `--border` (decorativo: la información está en el texto); el placeholder del cuadro de mensaje
+  deshabilitado ("Elige un modelo…") queda exento como control deshabilitado.
+- Los elementos deshabilitados no tienen mínimo obligatorio en WCAG, pero se piden aquí porque el
+  desplegable bloqueado o deshabilitado muestra información (la personalidad).
 
 ## Cómo probarlo a mano
 
