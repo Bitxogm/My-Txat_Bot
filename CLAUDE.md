@@ -66,6 +66,7 @@ Dependencias Python con uv (`uv add`), siempre con `uv.lock` commiteado.
 - Reglas por carpeta en `.claude/rules/` (backend, frontend); se cargan solas al tocar esos ficheros.
 - Ramas, commits y títulos de PR en inglés. Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`). Ramas `feat/...`, `fix/...`, `chore/...`, `docs/...`.
 - Descripciones de PR en español, siguiendo `.github/pull_request_template.md`.
+- Funcionalidades nuevas (no fixes ni lo ya hecho): antes de implementar, su spec ligera en `docs/specs/<nombre>.md` (plantilla `docs/specs/_template.md`), enlazada desde el roadmap. `testing-qa` valida contra sus criterios de aceptación además de los tests, y la PR los repasa en "Cómo probarlo".
 
 ### Ciclo de tarea (automático)
 Claude hace ramas, commits, push y PRs sin pedir permiso. Void revisa y mergea; Claude **nunca** mergea.
