@@ -99,6 +99,19 @@ Requieren sesión. Tabla `attachments` (migración v4); el fichero en `UPLOAD_DI
 - Imágenes: se guardan recodificadas (≤1568 px, sin metadatos) y van al modelo como imágenes, solo si tiene visión (si no, 400 `MODEL_WITHOUT_VISION`) y solo las 4 más recientes de la conversación. `GET …/attachments/{attachment_id}/content` devuelve la imagen (solo imágenes) para las miniaturas.
 - Frontend: el clip del compositor sube cada fichero al momento (en un chat nuevo crea antes la conversación) y lo muestra como chip; el envío espera a que terminen las subidas. Al abrir una conversación vuelven al compositor sus adjuntos pendientes. Con un modelo en la nube se avisa de que el contenido sale de la red. Las imágenes se ven como miniaturas (en el compositor y en el mensaje, que enlaza a la imagen completa); el selector marca los modelos que «ven imágenes», el envío se bloquea si hay imágenes y el modelo no las ve, y con un modelo remoto con visión se avisa de que las imágenes recientes de la conversación también salen de la red.
 
+## Valoraciones (ADR-024)
+
+Requieren sesión. 👍/👎 por respuesta del asistente y, con 👎, motivos y una corrección escrita. El modelo no las ve todavía (se usarán en el RAG, Fase 4).
+
+- Cada respuesta guarda con qué se generó: `messages.model`, `provider` (`ollama` o el nombre del proveedor) y `base_prompt_version`. Las respuestas anteriores a esto los tienen a NULL.
+- `PUT /api/messages/{id}/feedback` `{ rating: 1|-1, reasons?: [...], correction?: string|null }` crea o sustituye la valoración (una por respuesta; conserva `created_at`). Motivos: `incorrect`, `wrong_command`, `incomplete`, `too_long`, `off_personality`, `other`. `correction` ≤ 4000 caracteres, sin caracteres de control (salvo saltos de línea y tabuladores), recortada; vacía → `null`. Con 👍 no se admiten motivos ni corrección (422). Solo respuestas del asistente en `done` o `stopped` con texto; si no, 422 `FEEDBACK_NOT_ALLOWED`. Mensaje inexistente → 404 `MESSAGE_NOT_FOUND`.
+- Al valorar se guarda una copia del turno: la pregunta (el mensaje del usuario anterior; de sus ficheros, solo los nombres), la respuesta, el modelo, el proveedor, la personalidad y la huella de la capa base. En respuestas antiguas el modelo es el último de la conversación, marcado `model_approximate: true`, y la huella queda `null` (desconocida).
+- `DELETE /api/messages/{id}/feedback` → 204 (404 `FEEDBACK_NOT_FOUND` si no hay).
+- `GET /api/feedback?rating=&model=&personality=&reason=&from=&to=&conversation_id=&limit=50&offset=0` → `{ items, total }`, más recientes primero (`limit` ≤ 200; fechas `AAAA-MM-DD`, en UTC, `to` incluido).
+- `GET /api/feedback/export` (mismos filtros) → JSONL descargable, más antiguas primero. Formato en [feedback-export.md](feedback-export.md).
+- Los mensajes de `GET /api/conversations/{id}` llevan `feedback: { rating, reasons, correction } | null`.
+- Borrar una conversación borra sus valoraciones (`ON DELETE CASCADE`); `GET /api/feedback?conversation_id=…&limit=1` da cuántas se perderían.
+
 ## API de chat
 
 Requiere sesión (401 sin cookie válida). `/api/chat` es la variante sin estado (el cliente manda todo el historial y no se guarda nada).
@@ -107,7 +120,7 @@ Requiere sesión (401 sin cookie válida). `/api/chat` es la variante sin estado
 - `POST /api/chat` con `{ "model"?: string, "messages": [{ "role": "system"|"user"|"assistant", "content": string }] }`. Si no se indica `model` se usa `DEFAULT_MODEL`.
 - Respuesta `text/event-stream`:
   - `event: token` / `data: {"content": "..."}` por cada fragmento.
-  - `event: done` / `data: {"model": "..."}` al terminar.
+  - `event: done` / `data: {"model": "...", "message_id"?: n}` al terminar. `message_id` (id de la respuesta guardada) solo en `/api/conversations/{id}/messages`.
   - `event: error` / `data: {code, message, request_id}` si falla con el stream ya empezado.
 - Los fallos antes del primer token (modelo inexistente → 404 `MODEL_NOT_FOUND`, Ollama caído → 503 `MODEL_UNAVAILABLE`, respuesta sin texto → 502 `EMPTY_REPLY`) devuelven el JSON de error normal.
 - Razonamiento de los modelos que lo tienen (qwen3.5, deepseek-r1…) desactivado por defecto (`OLLAMA_THINK=false`): con él, Ollama manda el razonamiento aparte, el backend lo ignora y la primera palabra puede tardar minutos o no llegar si se agota el límite de longitud.

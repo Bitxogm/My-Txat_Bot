@@ -58,6 +58,12 @@
 - El contenido llega al modelo como datos delimitados en el mensaje del usuario; un fichero no puede cerrar su propio bloque. Sigue siendo una barrera de prompt: un fichero ajeno puede llevar instrucciones escondidas.
 - Los ficheros se borran del disco al borrar su conversación; los huérfanos, al arrancar. Carpeta 700, ficheros 600.
 
+## Valoraciones (ADR-024)
+- Los cuatro endpoints (`/api/messages/{id}/feedback`, `/api/feedback`, `/api/feedback/export`) requieren sesión.
+- La corrección es texto del usuario: ≤ 4000 caracteres, sin caracteres de control salvo saltos de línea y tabuladores, y el frontend la pinta siempre como texto plano (nunca Markdown ni HTML).
+- El export solo saca la valoración y su copia del turno: ni el system prompt, ni el contenido de los adjuntos (solo sus nombres), ni ids internos. Se descarga con `no-store`.
+- Con un modelo de la nube, la pregunta y la respuesta ya salieron de la red al generarse; la valoración y la corrección no salen nunca (no llegan al modelo).
+
 ## PWA (ADR-017)
 - El service worker solo precachea el shell estático (HTML, JS, CSS, fuentes, iconos). **Nunca maneja `/api`**: no hay ninguna ruta de `runtimeCaching` y `/api/` está fuera del `navigateFallback`. Conversaciones, adjuntos, miniaturas y sesión siempre vienen de la red.
 - La API responde `Cache-Control: no-store` por defecto (middleware), también las miniaturas y el SSE: nada de la sesión queda en la caché HTTP del navegador. El logout añade `Clear-Site-Data: "cache"`, que solo actúa con HTTPS. Al cerrar sesión o caducar, el frontend borra cualquier caché que no sea el precache del shell.
