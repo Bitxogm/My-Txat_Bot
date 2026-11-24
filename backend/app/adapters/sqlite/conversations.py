@@ -7,6 +7,7 @@ import aiosqlite
 from app.domain.chat import Role
 from app.domain.conversation import (
     Conversation,
+    Generation,
     MessageStatus,
     PersonalitySnapshot,
     StoredMessage,
@@ -45,6 +46,15 @@ def _message(row: aiosqlite.Row) -> StoredMessage:
         content=row["content"],
         status=cast(MessageStatus, row["status"]),
         created_at=datetime.fromisoformat(row["created_at"]),
+        generation=(
+            Generation(
+                model=row["model"],
+                provider=row["provider"] or "",
+                base_prompt_version=row["base_prompt_version"] or "",
+            )
+            if row["model"]
+            else None
+        ),
     )
 
 
@@ -164,14 +174,45 @@ class SqliteConversationRepository:
         ) as cursor:
             return [_message(row) for row in await cursor.fetchall()]
 
+    async def get_message(self, message_id: int) -> StoredMessage | None:
+        async with self._db.execute("SELECT * FROM messages WHERE id = ?", (message_id,)) as cur:
+            row = await cur.fetchone()
+        return _message(row) if row else None
+
+    async def previous_user_message(
+        self, conversation_id: str, before_id: int
+    ) -> StoredMessage | None:
+        async with self._db.execute(
+            "SELECT * FROM messages WHERE conversation_id = ? AND role = 'user' AND id < ?"
+            " ORDER BY id DESC LIMIT 1",
+            (conversation_id, before_id),
+        ) as cursor:
+            row = await cursor.fetchone()
+        return _message(row) if row else None
+
     async def add_message(
-        self, conversation_id: str, role: Role, content: str, status: MessageStatus
+        self,
+        conversation_id: str,
+        role: Role,
+        content: str,
+        status: MessageStatus,
+        generation: Generation | None = None,
     ) -> StoredMessage:
         now = _now()
+        gen = generation
         cursor = await self._db.execute(
-            "INSERT INTO messages (conversation_id, role, content, status, created_at)"
-            " VALUES (?, ?, ?, ?, ?)",
-            (conversation_id, role, content, status, now),
+            "INSERT INTO messages (conversation_id, role, content, status, created_at,"
+            " model, provider, base_prompt_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                conversation_id,
+                role,
+                content,
+                status,
+                now,
+                gen.model if gen else None,
+                gen.provider if gen else None,
+                gen.base_prompt_version if gen else None,
+            ),
         )
         await self._db.execute(
             "UPDATE conversations SET updated_at = ? WHERE id = ?", (now, conversation_id)
@@ -184,6 +225,7 @@ class SqliteConversationRepository:
             content=content,
             status=status,
             created_at=datetime.fromisoformat(now),
+            generation=generation,
         )
 
     async def delete_message(self, conversation_id: str, message_id: int) -> None:

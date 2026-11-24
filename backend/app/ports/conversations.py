@@ -4,6 +4,7 @@ from typing import Protocol
 from app.domain.chat import Role
 from app.domain.conversation import (
     Conversation,
+    Generation,
     MessageStatus,
     PersonalitySnapshot,
     StoredMessage,
@@ -43,10 +44,24 @@ class ConversationRepository(Protocol):
         """Oldest first."""
         ...
 
+    async def get_message(self, message_id: int) -> StoredMessage | None: ...
+
+    async def previous_user_message(
+        self, conversation_id: str, before_id: int
+    ) -> StoredMessage | None:
+        """The user message right before `before_id` (the question an answer replies to)."""
+        ...
+
     async def add_message(
-        self, conversation_id: str, role: Role, content: str, status: MessageStatus
+        self,
+        conversation_id: str,
+        role: Role,
+        content: str,
+        status: MessageStatus,
+        generation: Generation | None = None,
     ) -> StoredMessage:
-        """Append a message and bump the conversation's updated_at."""
+        """Append a message and bump the conversation's updated_at. `generation` records what
+        produced an assistant reply."""
         ...
 
     async def delete_message(self, conversation_id: str, message_id: int) -> None: ...
