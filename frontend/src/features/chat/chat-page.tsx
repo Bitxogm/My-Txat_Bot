@@ -8,6 +8,7 @@ import {
   type SettingsPage,
 } from '@/features/conversations/conversation-sidebar';
 import { useConversations } from '@/features/conversations/use-conversations';
+import { CorrectionsPage } from '@/features/feedback/corrections-page';
 import { OsintSourcesPage } from '@/features/osint-sources/osint-sources-page';
 import { PersonalitiesPage } from '@/features/personalities/personalities-page';
 import { PersonalitySelect } from '@/features/personalities/personality-select';
@@ -43,6 +44,8 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
   const [personalityId, setPersonalityId] = useState(DEFAULT_PERSONALITY_ID);
   // Bumped by "Nueva conversación" so the composer takes the focus again.
   const [newChats, setNewChats] = useState(0);
+  // A reply to scroll to once its conversation is open (from the corrections page).
+  const [highlight, setHighlight] = useState<number | null>(null);
 
   async function choosePersonality(personality: Personality) {
     const previous = personalityId;
@@ -69,10 +72,11 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
     setPage(next);
   }
 
-  async function openConversation(id: string) {
+  async function openConversation(id: string, messageId: number | null = null) {
     setSidebarOpen(false);
     setPage(null);
     setRateLimit(null);
+    setHighlight(messageId);
     const detail = await chat.open(id);
     // Files uploaded earlier and never sent come back to the composer.
     void attachments.load(detail ? id : null);
@@ -82,6 +86,7 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
   function startNew() {
     setSidebarOpen(false);
     setPage(null);
+    setHighlight(null);
     setRateLimit(null);
     setPersonalityId(DEFAULT_PERSONALITY_ID);
     setNewChats((n) => n + 1);
@@ -238,6 +243,12 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
           <PersonalitiesPage store={personalities} models={models} />
         ) : page === 'osint' ? (
           <OsintSourcesPage />
+        ) : page === 'corrections' ? (
+          <CorrectionsPage
+            models={models.map((m) => m.name)}
+            personalities={personalities.personalities.map((p) => p.name)}
+            onOpenConversation={(id, messageId) => void openConversation(id, messageId)}
+          />
         ) : (
           <>
             <MessageList
@@ -246,6 +257,7 @@ export function ChatPage({ username, onLogout }: ChatPageProps) {
               conversationId={chat.conversationId}
               localModel={selectedModel ? !selectedModel.remote : false}
               onRate={chat.rate}
+              highlightId={highlight}
             />
             <Composer
               focusKey={`${chat.conversationId ?? 'new'}:${newChats}:${page ?? 'chat'}`}
