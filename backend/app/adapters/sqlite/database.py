@@ -92,6 +92,35 @@ MIGRATIONS: list[str] = [
     CREATE INDEX idx_attachments_conversation ON attachments (conversation_id);
     CREATE INDEX idx_attachments_message ON attachments (message_id);
     """,
+    # v5: ratings of the assistant's replies (ADR-024). Each reply now records the model, its
+    # provider and the base layer fingerprint it was generated with (NULL on older replies and
+    # on user messages). A rating keeps a copy of the turn as it was when rated.
+    """
+    ALTER TABLE messages ADD COLUMN model TEXT;
+    ALTER TABLE messages ADD COLUMN provider TEXT;
+    ALTER TABLE messages ADD COLUMN base_prompt_version TEXT;
+    CREATE TABLE message_feedback (
+        id TEXT PRIMARY KEY,
+        message_id INTEGER NOT NULL UNIQUE REFERENCES messages (id) ON DELETE CASCADE,
+        conversation_id TEXT NOT NULL REFERENCES conversations (id) ON DELETE CASCADE,
+        rating INTEGER NOT NULL CHECK (rating IN (-1, 1)),
+        reasons TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(reasons)),
+        correction TEXT,
+        question TEXT NOT NULL,
+        question_files TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(question_files)),
+        answer TEXT NOT NULL,
+        model TEXT NOT NULL,
+        model_approximate INTEGER NOT NULL DEFAULT 0 CHECK (model_approximate IN (0, 1)),
+        provider TEXT,
+        personality_id TEXT,
+        personality_name TEXT,
+        base_prompt_version TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+    CREATE INDEX idx_feedback_conversation ON message_feedback (conversation_id);
+    CREATE INDEX idx_feedback_created ON message_feedback (created_at DESC);
+    """,
 ]
 
 

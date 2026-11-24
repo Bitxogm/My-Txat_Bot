@@ -5,7 +5,7 @@ import pytest
 
 from app.adapters.sqlite.conversations import SqliteConversationRepository
 from app.adapters.sqlite.database import MIGRATIONS, connect, sqlite_path
-from app.domain.conversation import title_from_message
+from app.domain.conversation import Generation, title_from_message
 
 
 async def test_create_list_and_order_by_activity(repo: SqliteConversationRepository) -> None:
@@ -132,3 +132,17 @@ async def test_stale_drafts(repo: SqliteConversationRepository) -> None:
 
     assert await repo.stale_drafts(datetime.now(UTC) - timedelta(hours=1)) == []
     assert await repo.stale_drafts(datetime.now(UTC) + timedelta(seconds=1)) == [draft.id]
+
+
+async def test_a_reply_keeps_what_generated_it(repo: SqliteConversationRepository) -> None:
+    conversation = await repo.create("t", "m")
+    generation = Generation(model="groq/x", provider="groq", base_prompt_version="abcd1234")
+
+    user = await repo.add_message(conversation.id, "user", "hola", "done")
+    reply = await repo.add_message(conversation.id, "assistant", "r", "done", generation)
+
+    stored = await repo.messages(conversation.id)
+    assert [m.generation for m in stored] == [None, generation]
+    assert await repo.get_message(reply.id) == stored[1]
+    assert await repo.previous_user_message(conversation.id, reply.id) == user
+    assert await repo.previous_user_message(conversation.id, user.id) is None

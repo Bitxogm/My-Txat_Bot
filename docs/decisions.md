@@ -177,3 +177,14 @@ Registro corto de decisiones de arquitectura. Formato: contexto, decisión, cons
   3. **Verificación de comandos** (Fase 5, con el asistente de Kali): comprobar en el entorno aislado con `--help`/`man` que la herramienta y sus flags existen antes de sugerirlos; si no, avisar.
   4. **Fine-tuning** (Fase 6): QLoRA de un modelo de 7-9B en el Acer con las preguntas y correcciones acumuladas, solo cuando haya datos suficientes.
 - **Consecuencias**: cada paso se puede medir con la batería y deshacer sin tocar el modelo, y el fine-tuning llega el último porque necesita los datos que generan los anteriores. El orden es de aprovechamiento: la captura de correcciones empieza antes que el RAG para ir acumulando datos.
+
+## ADR-024: Valoraciones de las respuestas con copia del turno
+- **Contexto**: la línea de mejora de las respuestas (ADR-023) empieza capturando 👍/👎 y correcciones. Esos datos alimentarán el RAG, la batería y el fine-tuning, así que tienen que seguir teniendo sentido aunque cambien el modelo de la conversación, la personalidad o la capa base. Hasta ahora no se guardaba qué modelo generó cada respuesta, solo el último de la conversación.
+- **Decisión**:
+  - Cada respuesta guarda `model`, `provider` y `base_prompt_version` al generarse.
+  - Una valoración por respuesta (`message_feedback`, `message_id` único), con una copia del turno tomada al valorar: pregunta (texto y nombres de sus ficheros, no su contenido), respuesta, modelo, proveedor, personalidad y huella de la capa base. En respuestas anteriores a este cambio el modelo es el de la conversación, marcado como aproximado, y la huella queda desconocida en lugar de suponer la actual.
+  - Solo se valoran respuestas del asistente terminadas o detenidas, con texto. 👍 no lleva motivos ni corrección; 👎 admite motivos (códigos estables en inglés; las etiquetas en español viven en el frontend) y una corrección de hasta 4000 caracteres.
+  - Borrar una conversación borra sus valoraciones (en cascada), como espera el usuario; el frontend avisa antes de cuántas se pierden.
+  - Export en JSONL (`docs/feedback-export.md`) como formato fuente; el de entrenamiento se derivará de él en la Fase 6.
+  - El modelo no ve las valoraciones hasta la Fase 4.
+- **Consecuencias**: el dataset es independiente de cambios posteriores, a costa de duplicar texto (pregunta y respuesta). Las valoraciones de respuestas antiguas son menos fiables (modelo aproximado, huella desconocida) y lo dicen. Una conversación borrada se lleva sus correcciones: si se quieren conservar, hay que exportarlas antes.

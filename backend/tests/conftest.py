@@ -11,6 +11,7 @@ from app.adapters.files.local_storage import LocalFileStorage
 from app.adapters.sqlite.attachments import SqliteAttachmentRepository
 from app.adapters.sqlite.conversations import SqliteConversationRepository
 from app.adapters.sqlite.database import connect
+from app.adapters.sqlite.feedback import SqliteFeedbackRepository
 from app.adapters.sqlite.osint_sources import SqliteOsintSourceRepository
 from app.adapters.sqlite.personalities import SqlitePersonalityRepository
 from app.api.dependencies import get_llm_provider
@@ -132,6 +133,7 @@ def app(
     application.state.personalities = personality_repo
     application.state.osint_sources = osint_repo
     application.state.attachments = SqliteAttachmentRepository(db)
+    application.state.feedback = SqliteFeedbackRepository(db)
     application.state.file_storage = LocalFileStorage(tmp_path / "uploads")
     return application
 

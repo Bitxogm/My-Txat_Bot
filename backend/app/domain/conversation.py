@@ -40,6 +40,15 @@ class Conversation:
 
 
 @dataclass(frozen=True, slots=True)
+class Generation:
+    """What produced an assistant reply. Replies saved before it was recorded have none."""
+
+    model: str
+    provider: str
+    base_prompt_version: str
+
+
+@dataclass(frozen=True, slots=True)
 class StoredMessage:
     id: int
     conversation_id: str
@@ -47,6 +56,7 @@ class StoredMessage:
     content: str
     status: MessageStatus
     created_at: datetime
+    generation: Generation | None = None
 
 
 def title_from_message(content: str) -> str:

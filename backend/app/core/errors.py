@@ -154,6 +154,24 @@ class ModelUnavailableError(AppError):
     message = "El servidor de modelos no está disponible"
 
 
+class MessageNotFoundError(AppError):
+    status_code = HTTPStatus.NOT_FOUND
+    code = "MESSAGE_NOT_FOUND"
+    message = "El mensaje no existe"
+
+
+class FeedbackNotFoundError(AppError):
+    status_code = HTTPStatus.NOT_FOUND
+    code = "FEEDBACK_NOT_FOUND"
+    message = "Esa respuesta no tiene valoración"
+
+
+class FeedbackNotAllowedError(AppError):
+    status_code = HTTPStatus.UNPROCESSABLE_ENTITY
+    code = "FEEDBACK_NOT_ALLOWED"
+    message = "Solo se pueden valorar respuestas del asistente"
+
+
 class PersonalityLockedError(AppError):
     status_code = HTTPStatus.CONFLICT
     code = "PERSONALITY_LOCKED"

@@ -16,7 +16,8 @@ from app.ports.llm import LLMProvider
 logger = logging.getLogger(__name__)
 
 # Called once with the full reply and how it ended (done / stopped by the client / error).
-OnFinish = Callable[[str, MessageStatus], Awaitable[None]]
+# Returns the id of the saved message, if it was saved, for the `done` event.
+OnFinish = Callable[[str, MessageStatus], Awaitable[int | None]]
 
 
 def sse(event: str, data: dict[str, Any]) -> str:
@@ -72,10 +73,12 @@ async def stream_reply(
                 content += chunk
                 yield sse("token", {"content": chunk})
             status = "done"
-            if on_finish:
-                await on_finish(content, status)
+            message_id = await on_finish(content, status) if on_finish else None
             finished = True
-            yield sse("done", {"model": model})
+            done: dict[str, Any] = {"model": model}
+            if message_id is not None:
+                done["message_id"] = message_id
+            yield sse("done", done)
         except AppError as exc:
             status = "error"
             logger.warning("Chat stream failed: %s", exc.code)

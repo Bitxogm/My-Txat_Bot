@@ -10,6 +10,7 @@ from app.api.dependencies import (
     get_app_settings,
     get_attachment_repository,
     get_conversation_repository,
+    get_feedback_repository,
     get_file_storage,
     get_llm_provider,
     get_osint_source_repository,
@@ -38,16 +39,19 @@ from app.domain.context import Turn, fit_history
 from app.domain.conversation import (
     TITLE_MAX_CHARS,
     Conversation,
+    Generation,
     MessageStatus,
     PersonalitySnapshot,
     StoredMessage,
     title_from_message,
 )
+from app.domain.feedback import Feedback, FeedbackReason, Rating
 from app.domain.osint import format_osint_catalog, needs_osint_catalog
 from app.domain.personality import DEFAULT_PERSONALITY_ID, Personality
-from app.domain.prompts import compose_system_prompt
+from app.domain.prompts import BASE_PROMPT_VERSION, compose_system_prompt
 from app.ports.attachments import AttachmentRepository
 from app.ports.conversations import ConversationRepository
+from app.ports.feedback import FeedbackRepository
 from app.ports.file_storage import FileStorage
 from app.ports.llm import LLMProvider
 from app.ports.osint_sources import OsintSourceRepository
@@ -104,6 +108,18 @@ class MessageAttachment(BaseModel):
     truncated: bool
 
 
+class MessageFeedback(BaseModel):
+    """The rating of an assistant reply, as shown next to it."""
+
+    rating: Rating
+    reasons: list[FeedbackReason]
+    correction: str | None
+
+    @classmethod
+    def of(cls, f: Feedback) -> "MessageFeedback":
+        return cls(rating=f.rating, reasons=list(f.reasons), correction=f.correction)
+
+
 class MessageOut(BaseModel):
     id: int
     role: Role
@@ -111,15 +127,22 @@ class MessageOut(BaseModel):
     status: MessageStatus
     created_at: datetime
     attachments: list[MessageAttachment] = []
+    feedback: MessageFeedback | None = None
 
     @classmethod
-    def of(cls, m: StoredMessage, attachments: list[Attachment] | None = None) -> "MessageOut":
+    def of(
+        cls,
+        m: StoredMessage,
+        attachments: list[Attachment] | None = None,
+        feedback: Feedback | None = None,
+    ) -> "MessageOut":
         return cls(
             id=m.id,
             role=m.role,
             content=m.content,
             status=m.status,
             created_at=m.created_at,
+            feedback=MessageFeedback.of(feedback) if feedback else None,
             attachments=[
                 MessageAttachment(
                     id=a.id,
@@ -249,14 +272,18 @@ async def create_conversation(
 
 @router.get("/{conversation_id}")
 async def get_conversation(
-    conversation_id: ConversationId, repo: Repo, attachments: Attachments
+    conversation_id: ConversationId,
+    repo: Repo,
+    attachments: Attachments,
+    feedback: Annotated[FeedbackRepository, Depends(get_feedback_repository)],
 ) -> ConversationDetail:
     conversation = await _require(repo, conversation_id)
     messages = await repo.messages(conversation_id)
     by_message = _by_message(await attachments.list_for_conversation(conversation_id))
+    ratings = await feedback.for_conversation(conversation_id)
     return ConversationDetail(
         **ConversationOut.of(conversation).model_dump(),
-        messages=[MessageOut.of(m, by_message.get(m.id)) for m in messages],
+        messages=[MessageOut.of(m, by_message.get(m.id), ratings.get(m.id)) for m in messages],
     )
 
 
@@ -411,8 +438,16 @@ async def send_message(
             "La personalidad de la conversación ha cambiado; vuelve a enviar el mensaje"
         )
 
-    async def save_reply(content: str, status: MessageStatus) -> None:
-        await repo.add_message(conversation_id, "assistant", content, status)
+    provider = settings.provider_for(model)
+    generation = Generation(
+        model=model,
+        provider=provider.name if provider else "ollama",
+        base_prompt_version=BASE_PROMPT_VERSION,
+    )
+
+    async def save_reply(content: str, status: MessageStatus) -> int:
+        saved = await repo.add_message(conversation_id, "assistant", content, status, generation)
+        return saved.id
 
     async def undo_turn() -> None:
         # The model failed before answering (rate limit, unreachable...): the turn didn't
