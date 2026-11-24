@@ -6,6 +6,7 @@ from app.core.auth import SESSION_COOKIE, AuthService, Session
 from app.core.config import Settings
 from app.ports.attachments import AttachmentRepository
 from app.ports.conversations import ConversationRepository
+from app.ports.feedback import FeedbackRepository
 from app.ports.file_storage import FileStorage
 from app.ports.llm import LLMProvider
 from app.ports.osint_sources import OsintSourceRepository
@@ -24,6 +25,11 @@ def get_app_settings(request: Request) -> Settings:
 
 def get_conversation_repository(request: Request) -> ConversationRepository:
     repository: ConversationRepository = request.app.state.conversations
+    return repository
+
+
+def get_feedback_repository(request: Request) -> FeedbackRepository:
+    repository: FeedbackRepository = request.app.state.feedback
     return repository
 
 

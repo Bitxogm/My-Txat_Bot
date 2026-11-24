@@ -11,6 +11,7 @@ from app.adapters.llm_factory import build_llm_provider
 from app.adapters.sqlite.attachments import SqliteAttachmentRepository
 from app.adapters.sqlite.conversations import SqliteConversationRepository
 from app.adapters.sqlite.database import connect, sqlite_path
+from app.adapters.sqlite.feedback import SqliteFeedbackRepository
 from app.adapters.sqlite.osint_sources import SqliteOsintSourceRepository
 from app.adapters.sqlite.personalities import SqlitePersonalityRepository
 from app.api.dependencies import require_session
@@ -19,6 +20,7 @@ from app.api.routes import (
     auth,
     chat,
     conversations,
+    feedback,
     health,
     models,
     osint_sources,
@@ -46,6 +48,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.llm_provider = llm
         db = await connect(sqlite_path(settings.database_url))
         app.state.conversations = SqliteConversationRepository(db)
+        app.state.feedback = SqliteFeedbackRepository(db)
         attachment_repo = SqliteAttachmentRepository(db)
         app.state.attachments = attachment_repo
         file_storage = LocalFileStorage(Path(settings.upload_dir))
@@ -114,6 +117,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(chat.router, prefix="/api", dependencies=protected)
     app.include_router(conversations.router, prefix="/api", dependencies=protected)
     app.include_router(attachments.router, prefix="/api", dependencies=protected)
+    app.include_router(feedback.router, prefix="/api", dependencies=protected)
     app.include_router(personalities.router, prefix="/api", dependencies=protected)
     app.include_router(osint_sources.router, prefix="/api", dependencies=protected)
     return app
