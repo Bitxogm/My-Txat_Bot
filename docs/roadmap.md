@@ -55,7 +55,11 @@ Objetivo: un modelo que "aprende" de Void con el uso. Orden acordado: memoria �
 Cuando haya unos cientos de ejemplos valorados.
 - [ ] *(mejora)* QLoRA con Unsloth en el Acer (RTX 3060) de un modelo base de 7-9B, con las preguntas y correcciones acumuladas (Fases 3 y 4). Solo cuando haya datos suficientes
 - [ ] Importación a Ollama como modelo propio versionado (`txat-void:vN`), comparable con el original y reversible
+- [ ] Si Ollama añade Qwen3.8-Flash-Next u otro MoE mayor a su biblioteca, probarlo con `ollama pull` y la batería frente a `qwen3.6:35b-a3b`, sin cambiar de motor ([Plan B](research/moe-offload.md#plan-b))
 
 ## Fase 7: Extras
 - [ ] Voz: faster-whisper (STT) + Piper (TTS)
 - [ ] Backups automáticos de `data/`
+
+## Despliegue en el Acer
+- [ ] Ampliar el Acer a 32 GB de RAM es requisito para el despliegue: con 16 GB, `qwen3.6:35b-a3b` (22 GB, expertos en RAM) no cabe con holgura junto al sistema y Docker (`docs/research/moe-offload.md`)
