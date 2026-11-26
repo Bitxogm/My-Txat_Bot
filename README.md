@@ -90,3 +90,4 @@ La ayuda en hacking está pensada para entornos propios o con autorización expl
 - [Roadmap](docs/roadmap.md)
 - [Decisiones (ADR)](docs/decisions.md)
 - [Seguridad](docs/security.md)
+- [Despliegue en la torre Acer](docs/deploy-acer.md)
