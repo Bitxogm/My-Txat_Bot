@@ -32,7 +32,7 @@ Objetivo: un modelo que "aprende" de Void con el uso. Orden acordado: memoria �
 **Mejora de las respuestas** (ADR-023): los pesos del modelo no cambian con el uso; lo que mejora es el sistema alrededor. Orden: RAG → correcciones → verificación de comandos → fine-tuning. Las tareas marcadas *(mejora)* en esta fase y las siguientes forman esta línea.
 
 - [x] Aviso de límite de uso (429) de un proveedor, con el tiempo de espera y la opción de seguir con el modelo local (probado a mano con Groq)
-- [ ] Memoria persistente: datos sobre el usuario, su entorno y preferencias que se inyectan en cada conversación. El modelo propone recuerdos y el usuario los aprueba, edita o borra (nada se guarda sin visto bueno)
+- [ ] Memoria persistente ([spec](specs/persistent-memory.md)): datos sobre el usuario, su entorno, nivel, preferencias y reto en curso que se inyectan en cada conversación. Primera versión manual (página "Memoria" y botón "Recordar"); después, el modelo propone recuerdos y el usuario los aprueba, edita o borra (nada se guarda sin visto bueno)
 - [x] *(mejora)* Valoraciones 👍/👎 por respuesta; en 👎, motivos y la corrección escrita, con la página "Correcciones" y el export JSONL ([formato](feedback-export.md), ADR-024). Se guardan desde ya; se aprovechan en la Fase 4
 - [ ] Exportación del dataset (respuestas buenas y corregidas) para el fine-tuning: el formato de entrenamiento (pares instrucción/respuesta) se derivará del JSONL de las valoraciones
 
