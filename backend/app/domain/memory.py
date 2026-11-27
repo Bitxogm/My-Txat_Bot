@@ -27,6 +27,8 @@ CATEGORIES: tuple[MemoryCategory, ...] = tuple(CATEGORY_LABELS)
 
 MEMORY_MAX_CHARS = 200
 MAX_ACTIVE_MEMORIES = 30
+# Inactive and archived entries included: keeps the table and GET /api/memories bounded.
+MAX_MEMORIES = 200
 # ~1,000 tokens with the 3-characters-per-token estimate of domain/context.py: the block must
 # leave room for the history in an 8k window (and in Groq's 6,000-token budget).
 ACTIVE_MEMORY_MAX_CHARS = 3000
@@ -71,6 +73,9 @@ class Memory:
 def normalize_memory_text(text: str) -> str:
     """NFKC and trimmed. Raises ValueError for text that can't go into the prompt as one line."""
     normalized = unicodedata.normalize("NFKC", text).strip()
+    # After NFKC, which can lengthen the text (U+FDFA becomes 18 characters).
+    if not normalized or len(normalized) > MEMORY_MAX_CHARS:
+        raise ValueError(f"El texto debe tener entre 1 y {MEMORY_MAX_CHARS} caracteres")
     if has_unsafe_chars(normalized):
         raise ValueError("El texto contiene saltos de línea o caracteres no permitidos")
     if _DELIMITER.search(normalized):
@@ -81,17 +86,19 @@ def normalize_memory_text(text: str) -> str:
 def format_memory_block(memories: list[Memory]) -> str:
     """The delimited block for the system prompt, grouped by category; empty without memories.
 
-    Texts are validated when saved; they are cleaned again here (one line, no delimiter) so a
-    stored value can never close the block or pose as another section.
+    Texts are validated when saved; they are cleaned again here so a value that reached the
+    database another way (a restored backup, a future import) can never close the block or pose
+    as another section: NFKC, no control/invisible characters, no < > `, one line.
     """
     if not memories:
         return ""
     order = {category: i for i, category in enumerate(CATEGORIES)}
     lines = []
     for memory in sorted(memories, key=lambda m: (order[m.category], m.created_at)):
+        normalized = unicodedata.normalize("NFKC", memory.text)
         text = "".join(
-            " " if unicodedata.category(ch) in UNSAFE_CATEGORIES else ch
-            for ch in _DELIMITER.sub(" ", memory.text)
+            " " if unicodedata.category(ch) in UNSAFE_CATEGORIES or ch in "<>`" else ch
+            for ch in _DELIMITER.sub(" ", normalized)
         )
         text = " ".join(text.split())
         lines.append(f"- [{CATEGORY_LABELS[memory.category]}] {text}")

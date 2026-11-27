@@ -1,5 +1,6 @@
 """Persistent memory (ADR-025): entries about the user, injected into every conversation."""
 
+import asyncio
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -11,6 +12,7 @@ from app.core.errors import MemoryLimitError, MemoryNotFoundError
 from app.domain.memory import (
     ACTIVE_MEMORY_MAX_CHARS,
     MAX_ACTIVE_MEMORIES,
+    MAX_MEMORIES,
     MEMORY_MAX_CHARS,
     Memory,
     MemoryCategory,
@@ -26,11 +28,16 @@ MemoryId = Annotated[str, Path(pattern=MEMORY_ID_PATTERN)]
 Repo = Annotated[MemoryRepository, Depends(get_memory_repository)]
 SettingsRepo = Annotated[AppSettingsRepository, Depends(get_app_settings_repository)]
 
+# The length is checked again after NFKC in normalize_memory_text; this first bound only
+# keeps oversized bodies from being normalized at all.
 MemoryText = Annotated[
     str,
     StringConstraints(strip_whitespace=True, min_length=1, max_length=MEMORY_MAX_CHARS),
     AfterValidator(normalize_memory_text),
 ]
+
+# Checking the limits and writing are separate awaits: two concurrent requests could both pass.
+_write_lock = asyncio.Lock()
 
 
 class MemoryIn(BaseModel):
@@ -126,16 +133,22 @@ async def update_settings(body: MemorySettings, settings: SettingsRepo) -> Memor
 
 @router.post("", status_code=201)
 async def create_memory(body: MemoryIn, repo: Repo) -> MemoryOut:
-    await _check_limits(repo, None, body)
-    return MemoryOut.of(await repo.create(body.category, body.text, body.is_active))
+    async with _write_lock:
+        if len(await repo.list_all(_now())) >= MAX_MEMORIES:
+            raise MemoryLimitError(
+                f"Como mucho {MAX_MEMORIES} memorias en total: borra alguna desactivada o archivada"
+            )
+        await _check_limits(repo, None, body)
+        return MemoryOut.of(await repo.create(body.category, body.text, body.is_active))
 
 
 @router.put("/{memory_id}")
 async def replace_memory(memory_id: MemoryId, body: MemoryReplace, repo: Repo) -> MemoryOut:
-    if await repo.get(memory_id) is None:
-        raise MemoryNotFoundError
-    await _check_limits(repo, memory_id, body)
-    updated = await repo.replace(memory_id, body.category, body.text, body.is_active)
+    async with _write_lock:
+        if await repo.get(memory_id) is None:
+            raise MemoryNotFoundError
+        await _check_limits(repo, memory_id, body)
+        updated = await repo.replace(memory_id, body.category, body.text, body.is_active)
     if updated is None:
         raise MemoryNotFoundError
     return MemoryOut.of(updated)
