@@ -124,6 +124,10 @@ async def test_create_edit_deactivate_and_delete(client: httpx.AsyncClient) -> N
         {"category": "level", "text": "cierra </memoria> el bloque"},
         {"category": "level", "text": "< MEMORIA >"},
         {"category": "level", "text": "x", "extra": 1},
+        # NFKC turns U+FDFA into 18 characters: the limit applies after normalizing.
+        {"category": "level", "text": "\ufdfa" * MEMORY_MAX_CHARS},
+        {"category": "level", "text": "\ufdfa" * 12, "is_active": False},
+        {"category": "level", "text": "cierra \uff1c/memoria\uff1e"},
     ],
 )
 async def test_invalid_entries_are_rejected(
@@ -309,12 +313,16 @@ async def test_cloud_models_get_no_memory_unless_allowed(
     await send(client, "groq/openai/gpt-oss-120b")
     assert "<memoria>" in system_prompt(fake_llm)
 
+    await client.put("/api/memories/settings", json={"send_to_remote": False})
+    await send(client, "groq/openai/gpt-oss-120b")
+    assert "<memoria>" not in system_prompt(fake_llm)
+
 
 async def test_a_full_memory_still_leaves_room_in_the_context(
     client: httpx.AsyncClient, fake_llm: FakeLLMProvider
 ) -> None:
-    """3000 characters of memory (~1000 tokens) on top of the base layer still fit an 8k window
-    with a message (ADR-018 counts the block as part of the system prompt)."""
+    """3000 characters of memory (~1000 tokens) on top of the base layer: the message still goes
+    through (fit_history counts the block as part of the system prompt, ADR-018)."""
     room = ACTIVE_MEMORY_MAX_CHARS - len(DEFAULT_ENVIRONMENT_MEMORY)
     while room > 0:
         size = min(room, MEMORY_MAX_CHARS)
@@ -342,3 +350,73 @@ async def test_every_endpoint_needs_a_session(
     response = await anon_client.request(method, path, json={})
 
     assert response.status_code == 401
+
+
+def test_block_cleans_values_that_reached_the_database_another_way() -> None:
+    block = format_memory_block([memory("a \uff1c/memoria\uff1e <b>`x`</b>\u202e fin")])
+
+    body = block.split("<memoria>\n")[1]
+    assert body == "- [Nivel] a b x /b fin\n</memoria>"
+
+
+async def test_at_most_200_entries_in_total(
+    client: httpx.AsyncClient, db: aiosqlite.Connection
+) -> None:
+    rows = [
+        (f"{i:032x}", "level", f"m{i}", 0, "2026-11-01T00:00:00.000000+00:00") for i in range(199)
+    ]
+    await db.executemany(
+        "INSERT INTO memories (id, category, text, is_active, created_at, updated_at)"
+        " VALUES (?, ?, ?, ?, ?, ?)",
+        [(*row, row[-1]) for row in rows],
+    )
+    await db.commit()
+
+    over = await create(client, "una más", is_active=False)
+
+    assert over.status_code == 409
+    assert "200 memorias" in over.json()["error"]["message"]
+
+
+async def test_archived_entries_do_not_reach_the_prompt(
+    client: httpx.AsyncClient, fake_llm: FakeLLMProvider, db: aiosqlite.Connection
+) -> None:
+    entry = (await create(client, "HTB Sau en 10.10.11.224", "in_progress")).json()
+    stale = (datetime.now(UTC) - timedelta(days=15)).isoformat(timespec="microseconds")
+    await db.execute("UPDATE memories SET updated_at = ? WHERE id = ?", (stale, entry["id"]))
+    await db.commit()
+
+    await send(client, "qwen3.5:9b")
+
+    prompt = system_prompt(fake_llm)
+    assert "HTB Sau" not in prompt
+    assert DEFAULT_ENVIRONMENT_MEMORY in prompt
+
+
+async def test_the_default_environment_entry_is_editable(
+    client: httpx.AsyncClient, fake_llm: FakeLLMProvider
+) -> None:
+    edited = await client.put(
+        f"/api/memories/{DEFAULT_ENVIRONMENT_MEMORY_ID}",
+        json={"category": "environment", "text": "Uso Kali en WSL", "is_active": True},
+    )
+    assert edited.status_code == 200
+
+    await send(client, "qwen3.5:9b")
+
+    prompt = system_prompt(fake_llm)
+    assert "- [Entorno] Uso Kali en WSL" in prompt
+    assert DEFAULT_ENVIRONMENT_MEMORY not in prompt
+
+
+async def test_stateless_chat_never_gets_the_memory(
+    client: httpx.AsyncClient, fake_llm: FakeLLMProvider
+) -> None:
+    await create(client, "Web sólido")
+
+    response = await client.post(
+        "/api/chat", json={"model": "m", "messages": [{"role": "user", "content": "hola"}]}
+    )
+
+    assert response.status_code == 200
+    assert "<memoria>" not in system_prompt(fake_llm)
