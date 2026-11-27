@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path
@@ -8,11 +8,13 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 
 from app.api.dependencies import (
     get_app_settings,
+    get_app_settings_repository,
     get_attachment_repository,
     get_conversation_repository,
     get_feedback_repository,
     get_file_storage,
     get_llm_provider,
+    get_memory_repository,
     get_osint_source_repository,
     get_personality_repository,
 )
@@ -46,6 +48,7 @@ from app.domain.conversation import (
     title_from_message,
 )
 from app.domain.feedback import Feedback, FeedbackReason, Rating
+from app.domain.memory import Memory, format_memory_block
 from app.domain.osint import format_osint_catalog, needs_osint_catalog
 from app.domain.personality import DEFAULT_PERSONALITY_ID, Personality
 from app.domain.prompts import BASE_PROMPT_VERSION, compose_system_prompt
@@ -54,6 +57,7 @@ from app.ports.conversations import ConversationRepository
 from app.ports.feedback import FeedbackRepository
 from app.ports.file_storage import FileStorage
 from app.ports.llm import LLMProvider
+from app.ports.memories import AppSettingsRepository, MemoryRepository
 from app.ports.osint_sources import OsintSourceRepository
 from app.ports.personalities import PersonalityRepository
 
@@ -338,6 +342,8 @@ async def send_message(
     attachments: Attachments,
     storage: Annotated[FileStorage, Depends(get_file_storage)],
     settings: Annotated[Settings, Depends(get_app_settings)],
+    memories: Annotated[MemoryRepository, Depends(get_memory_repository)],
+    app_settings: Annotated[AppSettingsRepository, Depends(get_app_settings_repository)],
 ) -> StreamingResponse:
     """Save the user message, stream the reply (same SSE events as /api/chat) and save it.
 
@@ -375,7 +381,15 @@ async def send_message(
     reference = ""
     if needs_osint_catalog(snapshot.id):
         reference = format_osint_catalog(await osint_sources.list_all(active_only=True))
-    system_prompt = compose_system_prompt(snapshot.system_prompt, reference)
+    # The user's memory (ADR-025) goes to local models; to cloud ones only if the user allowed it.
+    provider = settings.provider_for(model)
+    remote = provider is not None and not provider.local
+    injected: list[Memory] = []
+    if not remote or await app_settings.memory_to_remote():
+        injected = await memories.in_use(datetime.now(UTC))
+    system_prompt = compose_system_prompt(
+        snapshot.system_prompt, reference, format_memory_block(injected)
+    )
 
     # File contents go inside the user's message as delimited DATA, never in the system prompt.
     by_message = _by_message(await attachments.list_for_conversation(conversation_id))

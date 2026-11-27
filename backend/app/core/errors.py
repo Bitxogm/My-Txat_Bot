@@ -172,6 +172,18 @@ class FeedbackNotAllowedError(AppError):
     message = "Solo se pueden valorar respuestas del asistente"
 
 
+class MemoryNotFoundError(AppError):
+    status_code = HTTPStatus.NOT_FOUND
+    code = "MEMORY_NOT_FOUND"
+    message = "Esa memoria no existe"
+
+
+class MemoryLimitError(AppError):
+    status_code = HTTPStatus.CONFLICT
+    code = "MEMORY_LIMIT"
+    message = "Has llegado al límite de memorias activas"
+
+
 class PersonalityLockedError(AppError):
     status_code = HTTPStatus.CONFLICT
     code = "PERSONALITY_LOCKED"

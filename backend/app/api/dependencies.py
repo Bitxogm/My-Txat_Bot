@@ -9,6 +9,7 @@ from app.ports.conversations import ConversationRepository
 from app.ports.feedback import FeedbackRepository
 from app.ports.file_storage import FileStorage
 from app.ports.llm import LLMProvider
+from app.ports.memories import AppSettingsRepository, MemoryRepository
 from app.ports.osint_sources import OsintSourceRepository
 from app.ports.personalities import PersonalityRepository
 
@@ -30,6 +31,16 @@ def get_conversation_repository(request: Request) -> ConversationRepository:
 
 def get_feedback_repository(request: Request) -> FeedbackRepository:
     repository: FeedbackRepository = request.app.state.feedback
+    return repository
+
+
+def get_memory_repository(request: Request) -> MemoryRepository:
+    repository: MemoryRepository = request.app.state.memories
+    return repository
+
+
+def get_app_settings_repository(request: Request) -> AppSettingsRepository:
+    repository: AppSettingsRepository = request.app.state.app_settings
     return repository
 
 
