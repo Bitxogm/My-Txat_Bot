@@ -94,9 +94,14 @@ cadenas que parecen secretos, pero quien decide es Void; el aviso no bloquea.
 - **La huella `BASE_PROMPT_VERSION`** pasa a cubrir también los textos fijos (marcos de la personalidad
   y de la memoria, recordatorio), no solo la capa base.
 - **La batería usa la memoria fija de prueba** (`evals/memory.yaml`), con solo la entrada de Entorno
-  por defecto. Así sigue recibiendo la regla de entorno que hoy está en la capa base, y las
+  por defecto. En la PR 1 es una constante (`EVAL_MEMORY_BLOCK` en `backend/app/evals/runner.py`) con
+  ese mismo texto; el fichero versionado, la opción `--memory` y su registro en el informe llegan con
+  la trazabilidad (PR 2). Así sigue recibiendo la regla de entorno que hoy está en la capa base, y las
   preguntas que la comprueban (P1, Homebrew) siguen midiendo lo mismo. Las mediciones anteriores
   tienen otra `BASE_PROMPT_VERSION` y no son directamente comparables (`docs/evals.md`).
+- **Límites de seguridad añadidos en la revisión**: el tope de 200 caracteres se comprueba después de
+  normalizar (NFKC puede alargar el texto), como mucho 200 entradas en total (contando desactivadas y
+  archivadas), y la comprobación de límites y la escritura van bajo un mismo candado.
 - **Global**: las personalidades cambian tono y método; el entorno y el nivel de Void son los mismos
   en todas.
 - **Copia, no referencia**: las memorias se editan y se borran; la respuesta guarda su texto de ese

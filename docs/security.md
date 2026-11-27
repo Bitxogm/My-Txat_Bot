@@ -64,6 +64,7 @@
 - La memoria va al system prompt como datos delimitados (`<memoria>`), después de la personalidad y antes del recordatorio: no puede anular la capa base. Su texto es de una línea, sin caracteres invisibles, bidi ni las etiquetas, y se limpia otra vez al componer; aun así es una barrera de prompt.
 - No se guardan credenciales, flags ni IPs o dominios reales de clientes o terceros (las de laboratorios y CTF, sí). El frontend avisa al escribir; quien decide es Void.
 - A un modelo de la nube no se le envía salvo que Void lo active (`send_to_remote`, desactivado por defecto): con él activado, la memoria sale de la red en cada mensaje.
+- "De la nube" es un proveedor compatible con OpenAI sin `_LOCAL=true`. Todo lo que sirve Ollama cuenta como local: si se usan modelos de Ollama en la nube (etiquetas `-cloud`) o un `OLLAMA_BASE_URL` remoto, recibirán la memoria. Con Ollama en la misma máquina (ADR-020), no ocurre.
 
 ## Valoraciones (ADR-024)
 - Los cuatro endpoints (`/api/messages/{id}/feedback`, `/api/feedback`, `/api/feedback/export`) requieren sesión.
