@@ -121,6 +121,34 @@ MIGRATIONS: list[str] = [
     CREATE INDEX idx_feedback_conversation ON message_feedback (conversation_id);
     CREATE INDEX idx_feedback_created ON message_feedback (created_at DESC);
     """,
+    # v6: persistent memory (ADR-025) and settings changed from the UI. The environment rule
+    # that was in the base layer becomes an editable memory, created once: deleting it is final.
+    # Its text must stay equal to domain/memory.py DEFAULT_ENVIRONMENT_MEMORY (tested).
+    """
+    CREATE TABLE memories (
+        id TEXT PRIMARY KEY,
+        category TEXT NOT NULL
+            CHECK (category IN ('environment', 'level', 'preferences', 'in_progress')),
+        text TEXT NOT NULL,
+        is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+        archived_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+    CREATE TABLE app_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+    );
+    INSERT INTO memories (id, category, text, is_active, created_at, updated_at) VALUES (
+        'memory-environment',
+        'environment',
+        'Uso Kali Linux / Ubuntu con zsh. Instalo con apt y el nombre exacto del paquete Debian.'
+        || ' No quiero Homebrew ni instrucciones de macOS/Windows salvo que las pida.',
+        1,
+        strftime('%Y-%m-%dT%H:%M:%f000+00:00', 'now'),
+        strftime('%Y-%m-%dT%H:%M:%f000+00:00', 'now')
+    );
+    """,
 ]
 
 
