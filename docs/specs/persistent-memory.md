@@ -1,6 +1,6 @@
 # Spec: memoria persistente (versión manual)
 
-Estado: borrador
+Estado: aprobada · backend en `feat/persistent-memory-backend` (PR 1 de 4)
 
 ## Objetivo
 
@@ -46,7 +46,8 @@ cadenas que parecen secretos, pero quien decide es Void; el aviso no bloquea.
 ## Criterios de aceptación
 
 1. **Dado** la página "Memoria" (barra lateral), **cuando** creo, edito, desactivo o borro una entrada
-   (categoría y texto de hasta 200 caracteres; como mucho 30 activas), **entonces** el cambio se
+   (categoría y texto de hasta 200 caracteres; como mucho 30 activas y 3.000 caracteres activos en
+   total), **entonces** el cambio se
    guarda y, en la siguiente respuesta, el modelo recibe exactamente las memorias activas. También
    puedo crear una desde el botón "Recordar" de uno de mis mensajes, que abre el formulario con el
    texto para recortarlo antes de guardar. Una entrada de "En curso" sin editar en 14 días pasa a
@@ -70,9 +71,28 @@ cadenas que parecen secretos, pero quien decide es Void; el aviso no bloquea.
 
 ## Decisiones
 
-- **Tamaño**: 30 entradas activas como máximo, de 200 caracteres. En total unos 1.000 tokens, que caben
-  en los 8k de contexto de los modelos locales sin quitarle mucho historial a la conversación. El
-  ajuste al contexto (ADR-018) cuenta el bloque de memoria como parte del system prompt.
+- **Tamaño**: 30 entradas activas como máximo, de 200 caracteres, y además **3.000 caracteres activos
+  en total** (unos 1.000 tokens con el estimador de 3 caracteres por token de `domain/context.py`;
+  30 x 200 serían unos 2.100). Así cabe en los 8k de contexto de los modelos locales y en los 6.000
+  de Groq sin quitarle mucho historial a la conversación. El ajuste al contexto (ADR-018) cuenta el
+  bloque de memoria como parte del system prompt.
+- **Texto de la entrada de Entorno por defecto** (migración v6 y memoria fija de la batería): "Uso Kali
+  Linux / Ubuntu con zsh. Instalo con apt y el nombre exacto del paquete Debian. No quiero Homebrew
+  ni instrucciones de macOS/Windows salvo que las pida." Se crea una sola vez: si se borra, no vuelve.
+- **El interruptor de la nube** se guarda en la base de datos (`app_settings`), desactivado por
+  defecto, y se cambia desde la página Memoria (también desde el móvil, sin reiniciar).
+- **`/api/chat`** (sin estado, no guarda nada y la batería no lo usa) no recibe la memoria.
+- **El aviso de IPs, dominios y secretos** vive solo en el frontend, mientras se escribe: el backend
+  no bloquea ni avisa (un aviso después de guardar no añade nada).
+- **"En curso" se archiva al leer** (al listar o al componer el prompt), no al arrancar: el servidor
+  puede pasar semanas sin reiniciarse. Editar o reactivar una entrada la saca del archivo.
+- **Formato del bloque**: `## Memoria del usuario`, una frase que lo marca como datos que no anulan
+  las reglas, y una línea `- [Categoría] texto` por entrada dentro de `<memoria>…</memoria>`,
+  agrupadas por categoría. Va después de la personalidad y antes del catálogo OSINT y del
+  recordatorio. El texto se guarda en una línea y sin las etiquetas `<memoria>`, y se vuelve a limpiar
+  al componer.
+- **La huella `BASE_PROMPT_VERSION`** pasa a cubrir también los textos fijos (marcos de la personalidad
+  y de la memoria, recordatorio), no solo la capa base.
 - **La batería usa la memoria fija de prueba** (`evals/memory.yaml`), con solo la entrada de Entorno
   por defecto. Así sigue recibiendo la regla de entorno que hoy está en la capa base, y las
   preguntas que la comprueban (P1, Homebrew) siguen midiendo lo mismo. Las mediciones anteriores
@@ -85,7 +105,7 @@ cadenas que parecen secretos, pero quien decide es Void; el aviso no bloquea.
 ## ADRs relacionados
 
 - ADR-013 (capas del prompt): la capa base pierde la regla de entorno y gana el bloque de memoria
-  delimitado. Necesita un ADR nuevo (memoria persistente) que lo registre.
+  delimitado. Lo registra ADR-025 (memoria persistente).
 - ADR-014 (catálogo OSINT): mismo patrón de bloque de referencia en el system prompt.
 - ADR-018 (ajuste al contexto): el bloque cuenta en el presupuesto.
 - ADR-019 (proveedores): `remote` decide si se envía la memoria.

@@ -59,6 +59,12 @@
 - El contenido llega al modelo como datos delimitados en el mensaje del usuario; un fichero no puede cerrar su propio bloque. Sigue siendo una barrera de prompt: un fichero ajeno puede llevar instrucciones escondidas.
 - Los ficheros se borran del disco al borrar su conversación; los huérfanos, al arrancar. Carpeta 700, ficheros 600.
 
+## Memoria persistente (ADR-025)
+- Los endpoints `/api/memories` requieren sesión.
+- La memoria va al system prompt como datos delimitados (`<memoria>`), después de la personalidad y antes del recordatorio: no puede anular la capa base. Su texto es de una línea, sin caracteres invisibles, bidi ni las etiquetas, y se limpia otra vez al componer; aun así es una barrera de prompt.
+- No se guardan credenciales, flags ni IPs o dominios reales de clientes o terceros (las de laboratorios y CTF, sí). El frontend avisa al escribir; quien decide es Void.
+- A un modelo de la nube no se le envía salvo que Void lo active (`send_to_remote`, desactivado por defecto): con él activado, la memoria sale de la red en cada mensaje.
+
 ## Valoraciones (ADR-024)
 - Los cuatro endpoints (`/api/messages/{id}/feedback`, `/api/feedback`, `/api/feedback/export`) requieren sesión.
 - La corrección es texto del usuario: ≤ 4000 caracteres, sin caracteres de control ni invisibles (bidi, ancho cero, separadores de línea Unicode, uso privado) salvo saltos de línea y tabuladores, porque acabará en el RAG o en un conjunto de entrenamiento, y el frontend la pinta siempre como texto plano (nunca Markdown ni HTML).

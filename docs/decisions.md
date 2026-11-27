@@ -188,3 +188,14 @@ Registro corto de decisiones de arquitectura. Formato: contexto, decisión, cons
   - Export en JSONL (`docs/feedback-export.md`) como formato fuente; el de entrenamiento se derivará de él en la Fase 6.
   - El modelo no ve las valoraciones hasta la Fase 4.
 - **Consecuencias**: el dataset es independiente de cambios posteriores, a costa de duplicar texto (pregunta y respuesta). Las valoraciones de respuestas antiguas son menos fiables (modelo aproximado, huella desconocida) y lo dicen. Una conversación borrada se lleva sus correcciones: si se quieren conservar, hay que exportarlas antes.
+
+## ADR-025: Memoria persistente como datos delimitados en el system prompt
+- **Contexto**: el modelo no sabía nada de Void entre conversaciones (entorno, nivel, preferencias, reto en curso), y la única pieza de ese tipo era la regla de entorno fija en la capa base ("Kali / Ubuntu con zsh, apt…"), que no se podía cambiar sin tocar código. Spec: `docs/specs/persistent-memory.md`.
+- **Decisión**:
+  - Tabla `memories` (categoría `environment`/`level`/`preferences`/`in_progress`, texto de una línea de hasta 200 caracteres, activa o no, archivada o no). Como mucho 30 activas y 3.000 caracteres activos en total (~1.000 tokens). Las de "En curso" se archivan al leer tras 14 días sin editarse.
+  - La regla de entorno sale de la capa base y pasa a ser una memoria de Entorno creada por la migración v6, editable y borrable. La capa base se queda con lo que no depende de Void (rigor, estilo, ámbito, seguridad).
+  - Las memorias en uso van en el system prompt dentro de `<memoria>…</memoria>`, después de la personalidad y antes del catálogo OSINT y del recordatorio, marcadas como datos que no anulan las reglas. Su texto no puede llevar saltos de línea, caracteres invisibles ni las etiquetas, y se limpia otra vez al componer. ADR-013 queda matizada: el system prompt es base + personalidad + memoria (+ referencia) + recordatorio.
+  - A un modelo de la nube (proveedor sin `_LOCAL=true`) no se le envía la memoria salvo que Void active el ajuste `memory_to_remote` (tabla `app_settings`, desactivado por defecto). `/api/chat` (sin estado) no la recibe.
+  - La batería usa siempre una memoria fija (la entrada de Entorno por defecto), nunca la real.
+  - `BASE_PROMPT_VERSION` pasa a cubrir todos los textos fijos del prompt, no solo la capa base.
+- **Consecuencias**: el bloque cuenta en el ajuste al contexto (ADR-018) y le quita hasta ~1.000 tokens al historial. Es una barrera de prompt, como la de la personalidad: un texto puede intentar instrucciones, aunque no pueda cerrar el bloque. La huella cambia, así que las mediciones anteriores de `docs/evals.md` no son directamente comparables. La trazabilidad (qué memorias tenía cada respuesta y cada valoración) llega en la PR siguiente: las respuestas guardadas entre medias no la tendrán.

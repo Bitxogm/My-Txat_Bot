@@ -99,6 +99,16 @@ Requieren sesión. Tabla `attachments` (migración v4); el fichero en `UPLOAD_DI
 - Imágenes: se guardan recodificadas (≤1568 px, sin metadatos) y van al modelo como imágenes, solo si tiene visión (si no, 400 `MODEL_WITHOUT_VISION`) y solo las 4 más recientes de la conversación. `GET …/attachments/{attachment_id}/content` devuelve la imagen (solo imágenes) para las miniaturas.
 - Frontend: el clip del compositor sube cada fichero al momento (en un chat nuevo crea antes la conversación) y lo muestra como chip; el envío espera a que terminen las subidas. Al abrir una conversación vuelven al compositor sus adjuntos pendientes. Con un modelo en la nube se avisa de que el contenido sale de la red. Las imágenes se ven como miniaturas (en el compositor y en el mensaje, que enlaza a la imagen completa); el selector marca los modelos que «ven imágenes», el envío se bloquea si hay imágenes y el modelo no las ve, y con un modelo remoto con visión se avisa de que las imágenes recientes de la conversación también salen de la red.
 
+## Memoria persistente (ADR-025)
+
+Requiere sesión. Entradas cortas sobre Void que se inyectan en cada conversación (spec `docs/specs/persistent-memory.md`).
+
+- `GET /api/memories` → `{ memories: [...], limits: { max_active, max_chars, max_active_chars }, send_to_remote }`. Cada entrada: `id`, `category` (`environment`, `level`, `preferences`, `in_progress`), `text`, `is_active`, `archived_at` (las de "En curso" se archivan al leer tras 14 días sin editarse), `created_at`, `updated_at`.
+- `POST /api/memories` `{ category, text, is_active? }` → 201; `PUT /api/memories/{id}` (sustitución completa, `is_active` obligatorio; saca la entrada del archivo); `DELETE` → 204. Texto de una línea, 1-200 caracteres, sin caracteres invisibles ni las etiquetas `<memoria>` (422). Más de 30 activas o de 3.000 caracteres activos → 409 `MEMORY_LIMIT`. Inexistente → 404 `MEMORY_NOT_FOUND`.
+- `PUT /api/memories/settings` `{ send_to_remote }`: si la memoria se envía también a modelos de la nube (desactivado por defecto; tabla `app_settings`).
+- La migración v6 crea la entrada de Entorno por defecto (la regla que antes estaba en la capa base), una sola vez.
+- En `POST /api/conversations/{id}/messages`, las memorias activas y no archivadas van al system prompt en un bloque `<memoria>` después de la personalidad; a un modelo de la nube, solo con `send_to_remote`. `/api/chat` no las recibe. La batería usa una memoria fija.
+
 ## Valoraciones (ADR-024)
 
 Requieren sesión. 👍/👎 por respuesta del asistente y, con 👎, motivos y una corrección escrita. El modelo no las ve todavía (se usarán en el RAG, Fase 4).

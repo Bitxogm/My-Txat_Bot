@@ -13,6 +13,8 @@ los informes completos, con las respuestas, se quedan en `evals/reports/` (fuera
   comparar entre sí aunque se midieran en días distintos.
 - Se actualiza en cada PR que mida modelos.
 
+- Desde ADR-025 la regla de entorno ("Kali/Ubuntu con zsh, apt…") ya no está en la capa base: la batería la recibe como memoria fija (la entrada de Entorno por defecto), nunca la memoria real de Void. La huella pasó a `e89a8f38` y ahora cubre también los textos fijos (marcos de personalidad y memoria, recordatorio): las tablas de abajo, con otra huella, no son directamente comparables con mediciones nuevas.
+
 Cómo medir (desde `backend/`):
 
 ```bash
