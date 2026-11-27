@@ -6,7 +6,7 @@ import re
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.api.generation import context_for
@@ -14,6 +14,12 @@ from app.core.config import Settings
 from app.core.errors import AppError, ModelRateLimitedError
 from app.domain.builtin_personalities import BUILTIN_PERSONALITIES
 from app.domain.context import Turn, fit_history
+from app.domain.memory import (
+    DEFAULT_ENVIRONMENT_MEMORY,
+    DEFAULT_ENVIRONMENT_MEMORY_ID,
+    Memory,
+    format_memory_block,
+)
 from app.domain.personality import MENTOR_CTF_ID, PersonalityFields
 from app.domain.prompts import compose_system_prompt
 from app.evals.checks import Question, check
@@ -91,6 +97,24 @@ def rate_limit_wait(exc: ModelRateLimitedError, attempt: int) -> float:
     return min(max(wait, 1.0) + 1.0, RATE_LIMIT_MAX_WAIT_SECONDS)
 
 
+# The battery never uses the user's real memory: always this fixed one, the default environment
+# entry (the rule that used to be in the base layer), so measurements stay comparable (ADR-025).
+_FIXED_AT = datetime(2026, 1, 1, tzinfo=UTC)
+EVAL_MEMORY_BLOCK = format_memory_block(
+    [
+        Memory(
+            id=DEFAULT_ENVIRONMENT_MEMORY_ID,
+            category="environment",
+            text=DEFAULT_ENVIRONMENT_MEMORY,
+            is_active=True,
+            archived_at=None,
+            created_at=_FIXED_AT,
+            updated_at=_FIXED_AT,
+        )
+    ]
+)
+
+
 async def ask(
     llm: LLMProvider,
     model: str,
@@ -100,7 +124,7 @@ async def ask(
     sleep: Sleep = asyncio.sleep,
 ) -> Result:
     _, personality = resolve_personality(question.personality or default_personality)
-    system_prompt = compose_system_prompt(personality.system_prompt)
+    system_prompt = compose_system_prompt(personality.system_prompt, memory=EVAL_MEMORY_BLOCK)
     budget, params = context_for(model, personality.params, settings)
     for attempt in range(1, RATE_LIMIT_RETRIES + 1):
         started = time.perf_counter()
