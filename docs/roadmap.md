@@ -55,6 +55,7 @@ Spec: [ux-sidebar-contrast](specs/ux-sidebar-contrast.md).
 ## Fase 6: Modelo propio (fine-tuning)
 Cuando haya unos cientos de ejemplos valorados.
 - [ ] *(mejora)* QLoRA con Unsloth en el Acer (RTX 3060) de un modelo base de 7-9B, con las preguntas y correcciones acumuladas (Fases 3 y 4). Solo cuando haya datos suficientes
+  - Stack previsto ([nota](research/fine-tuning-stack.md)): PyTorch + Transformers + PEFT (LoRA) + bitsandbytes (QLoRA) + TRL (`SFTTrainer` sobre el JSONL de valoraciones), con Unsloth como primera opción en la RTX 3060. Salida en GGUF a Ollama como `txat-void:vN`, comparada con el modelo base en la batería y descartada si sale peor. Descartados TensorFlow y scikit-learn para entrenar; scikit-learn sí para analizar el dataset
 - [ ] Importación a Ollama como modelo propio versionado (`txat-void:vN`), comparable con el original y reversible
 - [ ] Si Ollama añade Qwen3.8-Flash-Next u otro MoE mayor a su biblioteca, probarlo con `ollama pull` y la batería frente a `qwen3.6:35b-a3b`, sin cambiar de motor ([Plan B](research/moe-offload.md#plan-b))
 
